@@ -208,7 +208,18 @@ final class AnkeyInputController: IMKInputController {
     private func openReport(_ kind: ReportKind, _ sender: Any!, _ ctx: Context) {
         commit(sender, ctx, expand: false)
         refresh(sender, ctx)
-        MainActor.assumeIsolated { FeedbackFlow.shared.start(kind, settings: ctx.settings) }
+        let anchor = caretRect(sender)
+        MainActor.assumeIsolated { FeedbackFlow.shared.start(kind, settings: ctx.settings, anchor: anchor) }
+    }
+
+    /// The line the caret is on, in screen coordinates. Apps that cannot say give a zero rect, and the
+    /// HUD then sits at the bottom of the screen.
+    private func caretRect(_ sender: Any!) -> NSRect? {
+        guard let client = textClient(sender) else { return nil }
+        let location = client.selectedRange().location
+        var rect = NSRect.zero
+        client.attributes(forCharacterIndex: location == NSNotFound ? 0 : location, lineHeightRectangle: &rect)
+        return rect.height > 0 ? rect : nil
     }
 
     /// The menu item and the `///ankey` code both open Settings here. IMK and AppKit call on the main thread.

@@ -193,10 +193,22 @@ final class FeedbackHUD {
         panel.orderOut(nil)
     }
 
+    /// Where the user is typing: the HUD opens under this line, or above it when the screen ends first.
+    /// Without it the HUD sits at the bottom of the screen.
+    var anchor: NSRect?
+
     private func place(_ size: NSSize) {
-        let screen = NSScreen.main ?? NSScreen.screens.first
-        guard let area = screen?.visibleFrame else { return }
-        let origin = NSPoint(x: area.midX - size.width / 2, y: area.minY + area.height * 0.12)
+        let gap: CGFloat = 6
+        let anchorScreen = anchor.flatMap { a in
+            NSScreen.screens.first { $0.frame.contains(NSPoint(x: a.minX, y: a.midY)) }
+        }
+        guard let area = (anchorScreen ?? NSScreen.main ?? NSScreen.screens.first)?.visibleFrame else { return }
+        var origin = NSPoint(x: area.midX - size.width / 2, y: area.minY + area.height * 0.12)
+        if let anchor, anchorScreen != nil {
+            let below = anchor.minY - gap - size.height
+            origin.y = below >= area.minY ? below : anchor.maxY + gap
+            origin.x = min(max(anchor.minX, area.minX), area.maxX - size.width)
+        }
         panel.setFrame(NSRect(origin: origin, size: size), display: true)
     }
 }
