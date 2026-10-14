@@ -2,6 +2,7 @@
 # Build and sign dist/Ankey.app after the engine tests pass.
 #   ./build.sh            build only
 #   ./build.sh --install  also install into ~/Library/Input Methods
+# SIGN_IDENTITY=<hash or name> overrides the signing identity.
 # REQUIRE_DEVELOPER_ID=1 fails instead of falling back to an ad-hoc signature.
 set -eu
 
@@ -27,10 +28,11 @@ swiftc -swift-version 5 -O -target arm64-apple-macosx13.0 \
     "$ROOT/SettingsWindow.swift" "$ROOT/SettingsTabs.swift" "$ROOT/UpdatesTab.swift" \
     "$ROOT/InputController.swift" "$ROOT/main.swift"
 
-# Developer ID Application: REDACTED (REDACTED).
-SIGN_ID="REDACTED"
+# SIGN_IDENTITY picks the signing identity. Without it, the first Developer ID Application
+# identity in the keychain signs the app.
+SIGN_ID="${SIGN_IDENTITY:-$(security find-identity -v -p codesigning | awk '/Developer ID Application/ { print $2; exit }')}"
 sign() {
-    if codesign --force --sign "$SIGN_ID" --options runtime --timestamp "$1"; then
+    if [ -n "$SIGN_ID" ] && codesign --force --sign "$SIGN_ID" --options runtime --timestamp "$1"; then
         return
     fi
     if [ "${REQUIRE_DEVELOPER_ID:-0}" = 1 ]; then

@@ -12,7 +12,7 @@ Requires macOS 13 or later on Apple silicon. The settings window is in Vietnames
 
 ## Install
 
-1. Download `Ankey-X.Y.Z.zip` from the [latest release](https://github.com/nguyenvanduocit/ankey/releases/latest).
+1. Download `Ankey-X.Y.Z.zip` from the [latest release](../../releases/latest).
 2. Unzip it and move `Ankey.app` to `~/Library/Input Methods/`.
 3. Log out and back in. macOS lists a new input method only after that.
 4. Open System Settings → Keyboard → Input Sources → Edit… → **+**, choose Vietnamese, then **Ankey**.
@@ -72,7 +72,11 @@ You need the Xcode command line tools.
 ./build.sh --install   # also install into ~/Library/Input Methods
 ```
 
-The build runs the engine tests first and stops when one fails. Without the Developer ID certificate it signs ad-hoc, which is enough to run on your own Mac.
+The build runs the engine tests first and stops when one fails.
+
+Signing uses the first Developer ID Application identity in your keychain. Set `SIGN_IDENTITY=<hash or name>` to pick another one. Without any identity the app is signed ad-hoc, which runs on your own Mac. An ad-hoc build does not self-update.
+
+A fork publishes its own releases by changing `AnkeyReleaseRepo` in `Info.plist` to `owner/name`.
 
 ## Thanks
 

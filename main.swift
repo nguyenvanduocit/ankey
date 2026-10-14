@@ -3,7 +3,6 @@ import InputMethodKit
 import Carbon
 
 private let connectionName = "Ankey_Connection"
-private let bundleID = "dev.firegroup.inputmethod.Ankey"
 
 var ankeyServer: IMKServer!
 
@@ -20,7 +19,7 @@ Updater.shared.startScheduledChecks()
 _ = NSApplicationMain(CommandLine.argc, CommandLine.unsafeArgv)
 
 private func enableAnkey() {
-    let props = [kTISPropertyBundleID as String: bundleID] as CFDictionary
+    let props = [kTISPropertyBundleID as String: Bundle.main.bundleIdentifier ?? ""] as CFDictionary
     guard let list = TISCreateInputSourceList(props, true)?.takeRetainedValue() else {
         fputs("Input source list is empty.\n", stderr)
         exit(1)

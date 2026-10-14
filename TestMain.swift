@@ -231,17 +231,21 @@ func checkRelease() {
     expect(Version("1.0")! == Version("1.0.0")!, true, "missing part is zero")
     expect(Version("1.0.1")! > Version("1.0")!, true, "longer wins when nonzero")
 
+    func parse(_ data: Data) -> ReleaseInfo? {
+        ReleaseInfo.parse(json: data, repo: "example/ankey")
+    }
+
     let json = """
     {
       "tag_name": "v1.1.0",
       "body": "Fix tones",
       "assets": [
-        {"name": "Ankey-1.1.0.zip", "browser_download_url": "https://github.com/nguyenvanduocit/ankey/releases/download/v1.1.0/Ankey-1.1.0.zip"},
-        {"name": "Ankey-1.1.0.zip.sha256", "browser_download_url": "https://github.com/nguyenvanduocit/ankey/releases/download/v1.1.0/Ankey-1.1.0.zip.sha256"}
+        {"name": "Ankey-1.1.0.zip", "browser_download_url": "https://github.com/example/ankey/releases/download/v1.1.0/Ankey-1.1.0.zip"},
+        {"name": "Ankey-1.1.0.zip.sha256", "browser_download_url": "https://github.com/example/ankey/releases/download/v1.1.0/Ankey-1.1.0.zip.sha256"}
       ]
     }
     """
-    let info = ReleaseInfo.parse(json: Data(json.utf8))
+    let info = parse(Data(json.utf8))
     expect(info?.version.parts, [1, 1, 0], "release version")
     expect(info?.notes, "Fix tones", "release notes")
     expect(info?.zipURL.lastPathComponent, "Ankey-1.1.0.zip", "release zip")
@@ -255,15 +259,15 @@ func checkRelease() {
         ]}
         """.utf8)
     }
-    let good = "https://github.com/nguyenvanduocit/ankey/releases/download/v1.1.0/Ankey-1.1.0.zip"
+    let good = "https://github.com/example/ankey/releases/download/v1.1.0/Ankey-1.1.0.zip"
     let goodSum = good + ".sha256"
-    expect(ReleaseInfo.parse(json: release(zip: good, checksum: goodSum))?.notes, "", "null body is empty notes")
-    expect(ReleaseInfo.parse(json: release(zip: "http://github.com/nguyenvanduocit/ankey/releases/download/v1.1.0/Ankey-1.1.0.zip", checksum: goodSum)) == nil, true, "http rejected")
-    expect(ReleaseInfo.parse(json: release(zip: "https://evil.example/nguyenvanduocit/ankey/releases/download/v1.1.0/Ankey-1.1.0.zip", checksum: goodSum)) == nil, true, "foreign host rejected")
-    expect(ReleaseInfo.parse(json: release(zip: "https://github.com/other/repo/releases/download/v1.1.0/Ankey-1.1.0.zip", checksum: goodSum)) == nil, true, "foreign repo rejected")
-    expect(ReleaseInfo.parse(json: release(tag: "latest", zip: good, checksum: goodSum)) == nil, true, "bad tag rejected")
-    expect(ReleaseInfo.parse(json: Data("{\"tag_name\": \"v1.1.0\", \"assets\": []}".utf8)) == nil, true, "no assets rejected")
-    expect(ReleaseInfo.parse(json: Data("not json".utf8)) == nil, true, "garbage rejected")
+    expect(parse(release(zip: good, checksum: goodSum))?.notes, "", "null body is empty notes")
+    expect(parse(release(zip: "http://github.com/example/ankey/releases/download/v1.1.0/Ankey-1.1.0.zip", checksum: goodSum)) == nil, true, "http rejected")
+    expect(parse(release(zip: "https://evil.example/example/ankey/releases/download/v1.1.0/Ankey-1.1.0.zip", checksum: goodSum)) == nil, true, "foreign host rejected")
+    expect(parse(release(zip: "https://github.com/other/repo/releases/download/v1.1.0/Ankey-1.1.0.zip", checksum: goodSum)) == nil, true, "foreign repo rejected")
+    expect(parse(release(tag: "latest", zip: good, checksum: goodSum)) == nil, true, "bad tag rejected")
+    expect(parse(Data("{\"tag_name\": \"v1.1.0\", \"assets\": []}".utf8)) == nil, true, "no assets rejected")
+    expect(parse(Data("not json".utf8)) == nil, true, "garbage rejected")
 
     let hex = String(repeating: "ab", count: 32)
     expect(parseChecksum("\(hex)  Ankey-1.1.0.zip\n"), hex, "checksum shasum line")

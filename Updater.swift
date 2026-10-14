@@ -2,8 +2,8 @@ import Cocoa
 import CryptoKit
 import Security
 
-/// An update must be signed by the team that signs every Ankey release.
-private let signingRequirement = "anchor apple generic and certificate leaf[subject.OU] = \"REDACTED\""
+/// The GitHub repo (`owner/name`) that publishes Ankey releases.
+private let releaseRepo = Bundle.main.object(forInfoDictionaryKey: "AnkeyReleaseRepo") as? String ?? ""
 
 private let validityFlags = SecCSFlags(rawValue: kSecCSCheckAllArchitectures | kSecCSStrictValidate | kSecCSCheckNestedCode)
 
@@ -18,6 +18,7 @@ enum UpdateError: LocalizedError {
     case checksumMismatch
     case unzipFailed
     case badSignature
+    case unsignedBuild
     case unexpectedApp
     case notWritable
 
@@ -29,6 +30,7 @@ enum UpdateError: LocalizedError {
         case .checksumMismatch: return "Bản tải về bị lỗi, mã kiểm tra không khớp."
         case .unzipFailed: return "Không giải nén được bản tải về."
         case .badSignature: return "Bản tải về không có chữ ký hợp lệ của Ankey."
+        case .unsignedBuild: return "Bản này không có chữ ký Developer ID nên không tự cập nhật."
         case .unexpectedApp: return "Bản tải về không đúng ứng dụng hoặc phiên bản đã công bố."
         case .notWritable: return "Ankey nằm ở thư mục không ghi được, không tự cập nhật."
         }
@@ -113,6 +115,7 @@ final class Updater: ObservableObject {
     // MARK: Network
 
     private static func fetchLatest() async throws -> ReleaseInfo {
+        guard !releaseRepo.isEmpty else { throw UpdateError.noRelease }
         let url = URL(string: "https://api.github.com/repos/\(releaseRepo)/releases/latest")!
         var request = URLRequest(url: url, timeoutInterval: 15)
         request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
@@ -120,7 +123,7 @@ final class Updater: ObservableObject {
         let (data, response) = try await URLSession.shared.data(for: request)
         if (response as? HTTPURLResponse)?.statusCode == 404 { throw UpdateError.noRelease }
         guard (response as? HTTPURLResponse)?.statusCode == 200,
-              let release = ReleaseInfo.parse(json: data)
+              let release = ReleaseInfo.parse(json: data, repo: releaseRepo)
         else { throw UpdateError.badReply }
         return release
     }
@@ -175,11 +178,26 @@ final class Updater: ObservableObject {
         guard ditto.terminationStatus == 0 else { throw UpdateError.unzipFailed }
     }
 
+    /// The Apple team that signed the running app. Nil for an ad-hoc or unsigned build.
+    private static func ownTeamID() -> String? {
+        var running: SecCode?
+        var code: SecStaticCode?
+        var info: CFDictionary?
+        guard SecCodeCopySelf([], &running) == errSecSuccess, let running,
+              SecCodeCopyStaticCode(running, [], &code) == errSecSuccess, let code,
+              SecCodeCopySigningInformation(code, SecCSFlags(rawValue: kSecCSSigningInformation), &info) == errSecSuccess
+        else { return nil }
+        return (info as? [String: Any])?[kSecCodeInfoTeamIdentifier as String] as? String
+    }
+
+    /// An update must carry the Developer ID signature of the team that signed the running app.
     private static func verifySignature(of app: URL) throws {
+        guard let team = ownTeamID() else { throw UpdateError.unsignedBuild }
         var code: SecStaticCode?
         var requirement: SecRequirement?
+        let text = "anchor apple generic and certificate leaf[subject.OU] = \"\(team)\""
         guard SecStaticCodeCreateWithPath(app as CFURL, [], &code) == errSecSuccess, let code,
-              SecRequirementCreateWithString(signingRequirement as CFString, [], &requirement) == errSecSuccess,
+              SecRequirementCreateWithString(text as CFString, [], &requirement) == errSecSuccess,
               let requirement,
               SecStaticCodeCheckValidity(code, validityFlags, requirement) == errSecSuccess
         else { throw UpdateError.badSignature }

@@ -1,8 +1,5 @@
 import Foundation
 
-/// The GitHub repo that publishes Ankey releases.
-let releaseRepo = "nguyenvanduocit/ankey"
-
 /// A dotted version such as `1.2.3`. Missing trailing parts count as zero.
 struct Version: Comparable {
     let parts: [Int]
@@ -51,8 +48,8 @@ extension ReleaseInfo {
     }
 
     /// Reads the `releases/latest` reply. Returns nil unless the tag is a version and the
-    /// release carries `Ankey-*.zip` plus its `.sha256`, both hosted by this repo.
-    static func parse(json: Data) -> ReleaseInfo? {
+    /// release carries `Ankey-*.zip` plus its `.sha256`, both hosted by `repo` (`owner/name`).
+    static func parse(json: Data, repo: String) -> ReleaseInfo? {
         guard let payload = try? JSONDecoder().decode(Payload.self, from: json),
               let version = Version(payload.tag_name)
         else { return nil }
@@ -60,7 +57,7 @@ extension ReleaseInfo {
             payload.assets
                 .first { $0.name.hasPrefix("Ankey-") && matches($0.name) }
                 .flatMap { URL(string: $0.browser_download_url) }
-                .flatMap(releaseAssetURL)
+                .flatMap { releaseAssetURL($0, repo: repo) }
         }
         guard let zip = asset(where: { $0.hasSuffix(".zip") }),
               let checksum = asset(where: { $0.hasSuffix(".zip.sha256") })
@@ -68,9 +65,9 @@ extension ReleaseInfo {
         return ReleaseInfo(version: version, notes: payload.body ?? "", zipURL: zip, checksumURL: checksum)
     }
 
-    private static func releaseAssetURL(_ url: URL) -> URL? {
+    private static func releaseAssetURL(_ url: URL, repo: String) -> URL? {
         guard url.scheme == "https", url.host == "github.com",
-              url.path.hasPrefix("/\(releaseRepo)/releases/download/")
+              url.path.hasPrefix("/\(repo)/releases/download/")
         else { return nil }
         return url
     }
