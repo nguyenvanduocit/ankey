@@ -3,3 +3,4 @@ dist/
 .remember/
 .superpowers/
 .DS_Store
+.env
