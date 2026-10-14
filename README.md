@@ -14,11 +14,19 @@ Requires macOS 13 or later on Apple silicon. The settings window is in Vietnames
 
 ## Install
 
-1. Download `Ankey-X.Y.Z.zip` from the [latest release](../../releases/latest).
-2. Unzip it and move `Ankey.app` to `~/Library/Input Methods/`.
-3. Log out and back in. macOS lists a new input method only after that.
-4. Open System Settings → Keyboard → Input Sources → Edit… → **+**, choose Vietnamese, then **Ankey**.
-5. Switch to Ankey from the input-source menu in the menu bar.
+Run this in Terminal:
+
+```
+curl -fsSL https://raw.githubusercontent.com/nguyenvanduocit/ankey/main/install.sh | sh
+```
+
+[`install.sh`](install.sh) downloads the latest release and checks its SHA-256, Developer ID signature and bundle ID before it copies `Ankey.app` to `~/Library/Input Methods/`. Then:
+
+1. Log out and back in. macOS lists a new input method only after that.
+2. Open System Settings → Keyboard → Input Sources → Edit… → **+**, choose Vietnamese, then **Ankey**.
+3. Switch to Ankey from the input-source menu in the menu bar.
+
+To install by hand, download `Ankey-X.Y.Z.zip` from the [latest release](../../releases/latest), unzip it, move `Ankey.app` to `~/Library/Input Methods/` and continue from step 1.
 
 Later updates install themselves. See [Updates](#updates).
 
