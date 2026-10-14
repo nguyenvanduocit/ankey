@@ -134,13 +134,6 @@ final class AnkeyInputController: IMKInputController {
 
     override func menu() -> NSMenu! {
         let menu = NSMenu(title: "Ankey")
-        let telex = NSMenuItem(title: "Telex", action: nil, keyEquivalent: "")
-        telex.state = .on
-        menu.addItem(telex)
-        let vni = NSMenuItem(title: "VNI", action: #selector(showVNIJoke(_:)), keyEquivalent: "")
-        vni.target = self
-        menu.addItem(vni)
-        menu.addItem(.separator())
         let settings = NSMenuItem(title: "Cài đặt…", action: #selector(showSettings(_:)), keyEquivalent: ",")
         settings.target = self
         menu.addItem(settings)
@@ -175,42 +168,6 @@ final class AnkeyInputController: IMKInputController {
 
     @MainActor @objc private func showSettings(_ sender: Any?) {
         SettingsWindowController.shared.show()
-    }
-
-    @MainActor private static var jokeIndex = 0
-    private static let jokes: [(title: String, body: String, button: String)] = [
-        (
-            "VNI à? Ở đây chỉ có Telex.",
-            "Bấm bao nhiêu lần cũng vậy, VNI không có ở đây.\n\nTelex vẫn đang chạy. Gõ aa ra â, khỏi phải với tay lên hàng số.",
-            "Ờ, Telex thì Telex"
-        ),
-        (
-            "Lại VNI nữa à?",
-            "Hàng số sinh ra để nhập số điện thoại, không phải để gõ tiếng Việt.\n\nThử aa, ee, oo xem, tay đỡ mỏi hơn nhiều.",
-            "Thôi được, tôi sẽ thử"
-        ),
-        (
-            "Phát hiện người dùng VNI",
-            "Hệ thống đã ghi lại vụ này. Đồng nghiệp dùng Telex sẽ được thông báo.\n\n(Đùa thôi. Nhưng VNI thì vẫn không có.)",
-            "Tôi xin lỗi"
-        ),
-        (
-            "Bạn kiên trì thật.",
-            "Nút này không làm gì cả, bấm thêm cũng chỉ tốn thời gian của bạn.\n\nTelex thì làm việc cả ngày không phàn nàn.",
-            "Tôi chịu thua"
-        ),
-        (
-            "a6 hay aa?",
-            "Gõ a6 mất hai phím và một cú với tay. Gõ aa mất hai phím, tay vẫn ở yên.\n\nToán lớp một cũng biết chọn cái nào.",
-            "Ờ thì..."
-        ),
-    ]
-
-    @MainActor @objc private func showVNIJoke(_ sender: Any?) {
-        let joke = Self.jokes[Self.jokeIndex % Self.jokes.count]
-        Self.jokeIndex += 1
-        NSApp.activate(ignoringOtherApps: true)
-        runPixelAlert(title: joke.title, message: joke.body, buttons: [joke.button])
     }
 
     /// The caret may now sit anywhere, so the words typed before say nothing about the next one.
