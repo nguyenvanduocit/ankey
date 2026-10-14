@@ -14,6 +14,22 @@ curl -fsSL https://raw.githubusercontent.com/nguyenvanduocit/ankey/main/install.
 
 Đăng xuất rồi đăng nhập lại, sau đó thêm **Ankey** ở System Settings → Keyboard → Input Sources → Edit… → **+** → Vietnamese.
 
+Lần đầu mở, Ankey hiện cửa sổ **Hướng dẫn** gồm ba bước: bật Ankey, gõ thử, và các mẹo. Sau đó, menu bộ gõ → **Trợ giúp…** mở danh sách mã gõ nhanh và phần hỏi đáp. Cũng trong menu đó, **Gửi góp ý…** mở khung góp ý.
+
+## Mã gõ nhanh
+
+Gõ một mã ở đầu từ, mã chạy ngay ở chữ cuối, không cần phím kết thúc:
+
+| Mã | Việc |
+|---|---|
+| `///feedback` | Mở khung gõ góp ý (hoặc menu bộ gõ → Gửi góp ý…). Enter để gửi, Esc để bỏ. |
+| `///bug` | Như trên, đánh dấu là báo lỗi. |
+| `///ankey` | Mở Cài đặt. |
+
+Gõ sai một chữ thì chữ đã gõ giữ nguyên như bình thường, nên `//`, `http://` và `và/hoặc` không bị ảnh hưởng. Trong khung góp ý, Telex vẫn hoạt động, tối đa 1000 ký tự. Cmd, Ctrl, bấm chuột hoặc chuyển ứng dụng thì huỷ.
+
+Gõ góp ý là lúc duy nhất Ankey gửi chữ bạn gõ, và chỉ khi bạn bấm Enter. Nội dung gửi gồm đoạn bạn gõ, phiên bản macOS, loại chip, bảng mã và chế độ gõ, không có tên ứng dụng. Datadog còn nhận IP và user agent, và giữ 15 ngày.
+
 ## Phân biệt tiếng Anh và tiếng Việt
 
 Chỉ có luật Telex thì chưa đủ. Theo luật, `test` thành `tét` và `does` thành `doé` đều hợp lệ. Nên mình thêm ba lớp kiểm tra.
@@ -44,16 +60,16 @@ Vì thấy cả từ nên phím dấu không cần đúng thứ tự. `vieetj` v
 
 ## Thống kê
 
-Ankey không gửi gì đi, trừ khi bạn bật trong Cài đặt → Thống kê. Có hai công tắc, cả hai mặc định tắt.
+Ankey không gửi gì đi, trừ khi bạn tự gửi góp ý (mục trên) hoặc bật trong Cài đặt → Thống kê. Thống kê có hai công tắc, cả hai mặc định tắt.
 
 - **Ghi thống kê trên máy.** Ankey đếm số lần: từ được đổi dấu, từ giữ nguyên, Esc trả lại chữ đã gõ, chèn trực tiếp bị lệch. Chỉ lưu trên máy, giữ 30 ngày. Tắt là xoá hết.
-- **Gửi thống kê tới Datadog.** Mỗi ngày gửi tối đa một lần, chỉ các ngày đã qua. Tab Thống kê cho xem đúng dữ liệu sẽ gửi.
+- **Gửi thống kê tới Datadog.** Mỗi ngày gửi tối đa một lần, chỉ các ngày đã qua. Nút Sao chép trong tab Thống kê đưa đúng dữ liệu sẽ gửi vào clipboard.
 
 Không bao giờ lưu hay gửi chữ bạn gõ, phím bấm, tên ứng dụng hay nội dung gõ tắt. Các trường được gửi nằm trong danh sách cố định ở `Tests/TestMain.swift`, thêm một trường mới thì test đỏ cho tới khi danh sách đổi theo.
 
 Khi bạn bật gửi, Datadog nhận:
 
-- số liệu hiển thị trong tab Thống kê, cùng phiên bản Ankey, phiên bản macOS, kiểu đặt dấu, bảng mã và số luật theo ứng dụng (chỉ số lượng, không có tên);
+- số liệu đã đếm (nút Sao chép trong tab Thống kê cho xem đúng nội dung), cùng phiên bản Ankey, phiên bản macOS, kiểu đặt dấu, bảng mã và số luật theo ứng dụng (chỉ số lượng, không có tên);
 - một ID ngẫu nhiên của bản cài này, tạo khi bật gửi và bỏ khi tắt;
 - địa chỉ IP và user agent (`Ankey/<phiên bản> (macOS <phiên bản>)`) của máy bạn, vì mọi kết nối mạng đều gửi hai thứ đó.
 

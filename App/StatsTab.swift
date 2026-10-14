@@ -4,12 +4,12 @@ import SwiftUI
 /// The statistics switches and the exact data they keep and send.
 struct StatsTab: View {
     @ObservedObject var model: SettingsModel
-    @State private var log = StatsLog()
 
     /// The request body as it would go to Datadog. Datadog also sees this machine's IP address and user agent.
-    private var shownData: String {
+    /// It goes to the clipboard and is never drawn in the window, because its size grows with the log.
+    private func payloadJSON() -> String {
         let installID = model.value.shareStats ? StatsStore.installID() : nil
-        let events = StatsPayload.forThisMac(settings: model.value, log: log).events(installID: installID)
+        let events = StatsPayload.forThisMac(settings: model.value, log: StatsStore.load()).events(installID: installID)
         return String(data: LogIntake.body(events, pretty: true), encoding: .utf8) ?? "[]"
     }
 
@@ -29,7 +29,7 @@ struct StatsTab: View {
             if DatadogConfig.isConfigured {
                 PixelSection(
                     title: "Chia sẻ",
-                    footer: "Mỗi ngày Ankey gửi số liệu của những ngày đã qua tới Datadog, tối đa một lần. Datadog nhận số liệu bên dưới, một ID ngẫu nhiên của bản cài này, địa chỉ IP và user agent của máy bạn (mọi kết nối mạng đều gửi hai thứ sau). Tắt đi là bỏ ID, số liệu đã gửi nằm ở Datadog tới khi hết hạn lưu."
+                    footer: "Mỗi ngày Ankey gửi số liệu của những ngày đã qua tới Datadog, tối đa một lần. Datadog nhận số liệu thống kê (bấm Sao chép để xem đúng nội dung), một ID ngẫu nhiên của bản cài này, địa chỉ IP và user agent của máy bạn (mọi kết nối mạng đều gửi hai thứ sau). Tắt đi là bỏ ID, số liệu đã gửi nằm ở Datadog tới khi hết hạn lưu."
                 ) {
                     PixelToggle(
                         title: "Gửi thống kê tới Datadog",
@@ -44,40 +44,25 @@ struct StatsTab: View {
                 PixelSection(
                     title: "Dữ liệu",
                     footer: model.value.shareStats
-                        ? "Đây là phần nội dung sẽ gửi, giữ 30 ngày gần nhất trên máy."
-                        : "Đây là toàn bộ dữ liệu thống kê trên máy, giữ 30 ngày gần nhất."
+                        ? "Sao chép để xem đúng nội dung sẽ gửi. Máy giữ 30 ngày gần nhất."
+                        : "Sao chép để xem toàn bộ số liệu trên máy. Máy giữ 30 ngày gần nhất."
                 ) {
-                    ScrollView {
-                        Text(shownData)
-                            .font(Pixel.font(15))
-                            .foregroundStyle(Pixel.muted)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .textSelection(.enabled)
-                    }
-                    .frame(height: 160)
                     HStack(spacing: 2 * Pixel.unit) {
                         Button("Sao chép") {
                             NSPasteboard.general.clearContents()
-                            NSPasteboard.general.setString(shownData, forType: .string)
+                            NSPasteboard.general.setString(payloadJSON(), forType: .string)
                         }
                         .buttonStyle(PixelButtonStyle())
-                        Button("Làm mới") { log = StatsStore.load() }
+                        Button("Xoá số liệu") { StatsStore.clear() }
                             .buttonStyle(PixelButtonStyle())
-                        Button("Xoá số liệu") {
-                            StatsStore.clear()
-                            log = StatsStore.load()
-                        }
-                        .buttonStyle(PixelButtonStyle())
                     }
                 }
             }
         }
-        .onAppear { log = StatsStore.load() }
         .onChange(of: model.value.collectStats) { isOn in
             guard !isOn else { return }
             model.value.shareStats = false
             StatsStore.clear()
-            log = StatsStore.load()
         }
         .onChange(of: model.value.shareStats) { isOn in
             if !isOn { StatsStore.forgetSharing() }
