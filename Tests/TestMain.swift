@@ -130,104 +130,6 @@ func expect<T: Equatable>(_ got: T, _ want: T, _ label: String) {
     }
 }
 
-func checkMacroStorage() {
-    let suite = "ankey.tests.\(UUID().uuidString)"
-    let defaults = UserDefaults(suiteName: suite)!
-    defer { defaults.removePersistentDomain(forName: suite) }
-
-    // Never saved: defaults.
-    expect(Settings.load(from: defaults).macros, [], "macros default")
-    expect(Settings.load(from: defaults).shorthand, ["\u{0111}c"], "shorthand default")
-    expect(Settings.load(from: defaults).appRules, [], "appRules default")
-
-    // Round trip.
-    var settings = Settings()
-    settings.macros = [
-        Macro(shortcut: "vn", text: "Vi\u{1ec7}t Nam"),
-        Macro(shortcut: "ko", text: "kh\u{00f4}ng"),
-    ]
-    settings.shorthand = ["\u{0111}t"]
-    settings.appRules = [
-        AppRule(bundleID: "com.apple.Terminal", enabled: false),
-        AppRule(bundleID: "com.tdesktop.Telegram", insertion: .direct),
-    ]
-    settings.save(to: defaults)
-    expect(Settings.load(from: defaults), settings, "round trip")
-
-    // Cleanup on load: trim + lowercase, drop duplicates (first wins), non-letters,
-    // empty shortcut, empty text. An empty-text row does not reserve its shortcut.
-    settings.macros = [
-        Macro(shortcut: " VN ", text: "Vi\u{1ec7}t Nam"),
-        Macro(shortcut: "vn", text: "dup"),
-        Macro(shortcut: "VN", text: "dup upper"),
-        Macro(shortcut: "x1", text: "digit"),
-        Macro(shortcut: "", text: "none"),
-        Macro(shortcut: "ok", text: ""),
-        Macro(shortcut: "ok", text: "good"),
-    ]
-    settings.save(to: defaults)
-    expect(
-        Settings.load(from: defaults).macros,
-        [Macro(shortcut: "vn", text: "Vi\u{1ec7}t Nam"), Macro(shortcut: "ok", text: "good")],
-        "macro cleanup"
-    )
-
-    // Shorthand and apps: trim, shorthand lowercased, empty and duplicate entries dropped.
-    settings.shorthand = [" \u{0110}T ", "", "\u{0111}t", "ab"]
-    settings.appRules = [
-        AppRule(bundleID: " com.apple.Terminal ", enabled: false),
-        AppRule(bundleID: ""),
-        AppRule(bundleID: "com.apple.Terminal", insertion: .direct),
-        AppRule(bundleID: "com.googlecode.iterm2"),
-    ]
-    settings.save(to: defaults)
-    expect(Settings.load(from: defaults).shorthand, ["\u{0111}t", "ab"], "shorthand cleanup")
-    expect(
-        Settings.load(from: defaults).appRules,
-        [AppRule(bundleID: "com.apple.Terminal", enabled: false), AppRule(bundleID: "com.googlecode.iterm2")],
-        "appRules cleanup"
-    )
-
-    // Wrong stored types fall back to the field default.
-    defaults.set("oops", forKey: "macros")
-    defaults.set(5, forKey: "shorthand")
-    defaults.set("x", forKey: "appRules")
-    let fallback = Settings.load(from: defaults)
-    expect(fallback.macros, [], "macros wrong type")
-    expect(fallback.shorthand, ["\u{0111}c"], "shorthand wrong type")
-    expect(fallback.appRules, [], "appRules wrong type")
-
-    // Apps excluded before per-app rules existed stay off, and saving drops the old key.
-    let legacy = UserDefaults(suiteName: suite + ".legacy")!
-    defer { legacy.removePersistentDomain(forName: suite + ".legacy") }
-    legacy.set(["com.apple.Terminal"], forKey: "excludedApps")
-    let migrated = Settings.load(from: legacy)
-    expect(migrated.appRules, [AppRule(bundleID: "com.apple.Terminal", enabled: false)], "excludedApps migrates")
-    migrated.save(to: legacy)
-    expect(legacy.object(forKey: "excludedApps") == nil, true, "old key removed on save")
-    expect(Settings.load(from: legacy), migrated, "migrated rules persist")
-
-    // A user who removed every shorthand word keeps an empty list.
-    var emptied = Settings()
-    emptied.shorthand = []
-    emptied.save(to: defaults)
-    expect(Settings.load(from: defaults).shorthand, [], "empty shorthand is kept")
-}
-
-func checkMacroProblems() {
-    let first = Macro(shortcut: "vn", text: "Vi\u{1ec7}t Nam")
-    let dup = Macro(shortcut: "VN", text: "again")
-    let noText = Macro(shortcut: "ko", text: "")
-    let noKey = Macro(shortcut: "", text: "x")
-    let digit = Macro(shortcut: "a1", text: "x")
-    let problems = Macro.problems(in: [first, dup, noText, noKey, digit])
-    expect(problems[first.id], nil, "first row has no problem")
-    expect(problems[dup.id], .duplicate, "case duplicate")
-    expect(problems[noText.id], .emptyText, "empty text")
-    expect(problems[noKey.id], .badShortcut, "empty shortcut")
-    expect(problems[digit.id], .badShortcut, "digit shortcut")
-}
-
 func checkAppRules() {
     var settings = Settings()
     settings.appRules = [
@@ -306,64 +208,20 @@ func checkRelease() {
     expect(parseChecksum(String(repeating: "zz", count: 32)), nil, "checksum not hex")
 }
 
-/// Prints the cost of one `Settings.load()` with a large macro table.
-func checkLoadTiming() {
-    let suite = "ankey.tests.\(UUID().uuidString)"
-    let defaults = UserDefaults(suiteName: suite)!
-    defer { defaults.removePersistentDomain(forName: suite) }
+/// Prints the cost of one `Engine.analyze` over a mix of words, with many learned words.
+func checkAnalyzeTiming() {
     var settings = Settings()
-    let letters = Array("abcdefghijklmnopqrstuvwxyz")
-    settings.macros = (0..<500).map { i in
-        let key = String([letters[i % 26], letters[(i / 26) % 26], letters[(i / 676) % 26]])
-        return Macro(shortcut: key, text: "expansion \(i)")
-    }
-    settings.save(to: defaults)
-    let loads = 1000
+    settings.adjust = Dictionary(uniqueKeysWithValues: (0..<300).map { ("userword\($0)", 2) })
+    let words = ["test", "reset", "hello", "vieetj", "tooi", "sex", "chaos", "cos", "thuowngf", "commit", "as", "xinf"]
+    let rounds = 100_000
+    var sink = 0
     let start = Date()
-    for _ in 0..<loads { _ = Settings.load(from: defaults) }
-    let perLoad = Date().timeIntervalSince(start) / Double(loads) * 1000
-    print("load with 500 macros: \(String(format: "%.3f", perLoad)) ms per load")
-}
-
-func checkExpansion() {
-    var settings = Settings()
-    settings.macros = [
-        Macro(shortcut: "vn", text: "vi\u{1ec7}t nam"),
-        Macro(shortcut: "uu", text: "\u{01b0}u ti\u{00ea}n"),
-        Macro(shortcut: "dd", text: "\u{0111}\u{00e2}y"),
-        Macro(shortcut: "as", text: "a-s"),
-        Macro(shortcut: "v", text: "v\u{1ec1}"),
-    ]
-    func want(_ raw: String, _ text: String?) {
-        expect(Engine.expansion(for: raw, settings), text, "expansion \(raw)")
+    for i in 0..<rounds {
+        let result = Engine.analyze(words[i % words.count], settings, after: i % 3 == 0 ? .english : .vietnamese)
+        sink &+= result.text.utf8.count
     }
-    want("vn", "vi\u{1ec7}t nam")                 // lowercase: as defined
-    want("Vn", "Vi\u{1ec7}t nam")                 // first letter capitalized
-    want("VN", "VI\u{1ec6}T NAM")                 // all caps
-    want("vN", "vi\u{1ec7}t nam")                 // other mix: as defined
-    want("V", "V\u{1ec1}")                        // single capital: capitalized
-    want("Uu", "\u{01af}u ti\u{00ea}n")           // Vietnamese first letter
-    want("UU", "\u{01af}U TI\u{00ca}N")           // Vietnamese uppercase
-    want("xx", nil)                               // no match
-    want("", nil)                                 // nothing typed
-    want("dd", "\u{0111}\u{00e2}y")               // the macro wins over Telex d+d
-    want("as", "a-s")                             // the macro wins over Telex tone s
-
-    expect(Engine.expansion(for: "vn", Settings()), nil, "empty table")
-
-    // Session: expansion matches the typed keys, not the display.
-    var session = Session()
-    for ch in "dd" { _ = session.push(ch) }
-    expect(session.display(settings), "\u{0111}", "display of dd")
-    expect(session.committed(settings, expand: true), "\u{0111}\u{00e2}y", "committed expand")
-    expect(session.committed(settings, expand: false), "\u{0111}", "committed no expand")
-
-    // Backspace edits the typed keys before the expansion is looked up.
-    var edited = Session()
-    for ch in "vnx" { _ = edited.push(ch) }
-    expect(edited.pop(), true, "pop x")
-    expect(edited.committed(settings, expand: true), "vi\u{1ec7}t nam", "expansion after backspace")
-    expect(Session().committed(settings, expand: true), "", "empty session commits nothing")
+    let perCall = Date().timeIntervalSince(start) / Double(rounds) * 1_000_000
+    print("analyze with 300 learned words: \(String(format: "%.3f", perCall)) us per call (\(sink))")
 }
 
 func checkShorthand() {
@@ -441,8 +299,7 @@ func telexKeys(_ syllable: String) -> (inline: String, deferred: String) {
 /// Every attested syllable types out in both key orders, in either tone placement.
 func checkSyllables() {
     func render(_ raw: String, _ style: ToneStyle) -> String {
-        var settings = Settings(toneStyle: style)
-        settings.keepEnglish = []
+        let settings = Settings(toneStyle: style)
         return Engine.render(raw, settings).precomposedStringWithCanonicalMapping
     }
     var english = 0
@@ -493,7 +350,7 @@ func checkLateCircumflex() {
     check("theme", "th\u{00ea}m")
 }
 
-func checkKeepEnglish() {
+func checkBuiltInEnglish() {
     // The built-in list keeps these English with no setting saved.
     for word in ["test", "reset", "boot", "row", "saw", "law", "door", "asap"] {
         check(word, Settings(), word)
@@ -501,11 +358,7 @@ func checkKeepEnglish() {
         check(word.uppercased(), Settings(), word.uppercased())
     }
     check("tes", Settings(), "t\u{00e9}")
-    var custom = Settings()
-    custom.keepEnglish = ["tes"]
-    check("tes", custom, "tes")
-    check("test", custom, "test")
-    // Keeping English is part of restoring raw text.
+    // The built-in words are part of restoring raw text.
     check("test", Settings(restoreRaw: false), "t\u{00e9}t")
     // Words people type as Vietnamese stay Vietnamese by default.
     for (raw, want) in [("cams", "c\u{00e1}m"), ("tets", "t\u{00e9}t"), ("cos", "c\u{00f3}"), ("nos", "n\u{00f3}"), ("gif", "g\u{00ec}"), ("aj", "\u{1ea1}"), ("oo", "\u{00f4}"), ("chaos", "ch\u{00e1}o")] {
@@ -519,20 +372,244 @@ func checkKeepEnglish() {
     for word in English.context {
         expect(Engine.render(word, Settings(), after: .english), word, "\(word) after English")
     }
+}
 
+/// One score decides the language: the built-in band, plus one after an English word, plus the learned adjustment.
+/// The word stays as typed from 2 up.
+func checkScore() {
+    func settings(_ word: String, _ adjust: Int) -> Settings {
+        var s = Settings()
+        s.adjust = [word: adjust]
+        return s
+    }
+    // A context word (band 1) after Vietnamese needs +1; an unlisted word stays Vietnamese after English.
+    check("chaos", settings("chaos", 1), "chaos")
+    check("chaos", settings("chaos", 0), "ch\u{00e1}o")
+    expect(Engine.render("cos", Settings(), after: .english), "c\u{00f3}", "cos 0 after English")
+    // A context word (band 1) needs +1, or the English word before it.
+    check("sex", settings("sex", 1), "sex")
+    expect(Engine.render("sex", Settings(), after: .english), "sex", "sex after English")
+    // An always word (band 2) turns Vietnamese from -1, but the English word before it adds one back.
+    check("test", settings("test", -1), "t\u{00e9}t")
+    expect(Engine.render("test", settings("test", -1), after: .english), "test", "test -1 after English")
+    check("test", settings("test", -2), "t\u{00e9}t")
+    expect(Engine.render("test", settings("test", -2), after: .english), "t\u{00e9}t", "test -2 after English")
+    // The adjustment belongs to one word, in any case.
+    check("tes", settings("chaos", 2), "t\u{00e9}")
+    check("CHAOS", settings("chaos", 1), "CHAOS")
+    // The gates stay outside the score: a word that is no syllable stays English, and so does code.
+    check("hello", settings("hello", -2), "hello")
+    expect(Engine.render("chaos", settings("chaos", -2), after: .english, glued: true), "chaos", "glued word")
+    // With raw restore off nothing is judged.
+    var off = settings("chaos", 2)
+    off.restoreRaw = false
+    check("chaos", off, "ch\u{00e1}o")
+}
+
+func checkAdjustStore() {
     let suite = "ankey.tests.\(UUID().uuidString)"
     let defaults = UserDefaults(suiteName: suite)!
     defer { defaults.removePersistentDomain(forName: suite) }
-    expect(Settings.load(from: defaults).keepEnglish, [], "keepEnglish default")
-    var settings = Settings()
-    settings.keepEnglish = [" TEST ", "", "test", "best"]
+    let store = AdjustStore(defaults: defaults)
+    expect(store.words, [:], "nothing learned yet")
+    store.set("sex", to: 1)
+    store.set("test", to: -1)
+    expect(store.words, ["sex": 1, "test": -1], "set")
+    expect(AdjustStore(defaults: defaults).words, ["sex": 1, "test": -1], "written through")
+    store.set("sex", to: 9)
+    store.set("test", to: -9)
+    expect(store.words, ["sex": 2, "test": -2], "clamped to the scale")
+    store.set("sex", to: 0)
+    expect(store.words, ["test": -2], "zero forgets the word")
+    expect(AdjustStore(defaults: defaults).words, ["test": -2], "forgotten for good")
+    store.set("banj", to: 2)
+    expect(store.words, ["test": -2], "a word with no English side is not kept")
+
+    // Stored rows are cleaned the way the engine reads them.
+    defaults.set(["Sex ": 1, "": 2, "own": 0, "chaos": 9, "test": -9, "banj": 2], forKey: "wordAdjust")
+    expect(AdjustStore(defaults: defaults).words, ["sex": 1, "chaos": 2, "test": -2], "stored rows cleaned")
+    defaults.set(["banj": 2, "tooi": 1, "loop": -1], forKey: "wordAdjust")
+    expect(AdjustStore(defaults: defaults).words, ["loop": -1], "words learned without an English side are dropped")
+    defaults.set(5, forKey: "wordAdjust")
+    expect(AdjustStore(defaults: defaults).words, [:], "wrong type")
+    defaults.set(["a": "x"], forKey: "wordAdjust")
+    expect(AdjustStore(defaults: defaults).words, [:], "wrong value type")
+
+    // Settings carry a copy for the engine and never write it back, so a settings window opened before a
+    // correction cannot erase it.
+    store.set("sex", to: 1)
+    var settings = Settings.load(from: defaults, adjust: store)
+    expect(settings.adjust, store.words, "load copies the store")
+    settings.adjust = ["stale": 2]
     settings.save(to: defaults)
-    expect(Settings.load(from: defaults).keepEnglish, ["test", "best"], "keepEnglish cleanup")
-    defaults.set(5, forKey: "keepEnglish")
-    expect(Settings.load(from: defaults).keepEnglish, Settings().keepEnglish, "keepEnglish wrong type")
-    settings.keepEnglish = []
-    settings.save(to: defaults)
-    expect(Settings.load(from: defaults).keepEnglish, [], "empty keepEnglish is kept")
+    expect(store.words, ["test": -2, "sex": 1], "save leaves the store alone")
+    expect(AdjustStore(defaults: defaults).words, ["test": -2, "sex": 1], "save writes no adjustment")
+}
+
+/// Erasing a whole word and typing the same keys again says the engine chose the wrong language.
+func checkCorrection() {
+    let none = Settings()
+    func type(_ session: inout Session, _ keys: String, _ settings: Settings = Settings()) -> Correction? {
+        var found: Correction?
+        for ch in keys {
+            _ = session.push(ch)
+            if let correction = session.correction(settings) { found = correction }
+        }
+        return found
+    }
+    func erase(_ session: inout Session) {
+        while session.pop() {}
+    }
+
+    // Vietnamese was shown, so the retype turns English. `sex` has band 1, one step is enough.
+    var session = Session()
+    expect(type(&session, "sex"), nil, "the first typing is no correction")
+    expect(session.display(none), "s\u{1ebd}", "sex shows sẽ")
+    erase(&session)
+    expect(type(&session, "se"), nil, "no correction before the last key")
+    expect(type(&session, "x"), Correction(word: "sex", adjust: 1), "retyped sex")
+    var learned = none
+    learned.adjust = ["sex": 1]
+    expect(session.display(learned), "sex", "the retype shows English")
+    expect(type(&session, "y"), nil, "a correction fires once")
+
+    // English was shown, so the retype turns Vietnamese.
+    session = Session()
+    _ = type(&session, "test")
+    erase(&session)
+    expect(type(&session, "test"), Correction(word: "test", adjust: -1), "test turns Vietnamese")
+    // A word the lists know as English turns English even when Vietnamese wins by default.
+    session = Session()
+    _ = type(&session, "cos")
+    erase(&session)
+    expect(type(&session, "cos"), Correction(word: "cos", adjust: 2), "cos turns English")
+    // English needs evidence. A word the built-in lists do not know as English never turns English, so
+    // `banj` and `hocj` (no word of either language) keep their Vietnamese reading.
+    for word in ["banj", "hocj", "tooi"] {
+        session = Session()
+        _ = type(&session, word)
+        erase(&session)
+        expect(type(&session, word), nil, "\(word) has no English side")
+    }
+    session = Session()
+    _ = type(&session, "banj")
+    expect(session.display(none), "b\u{1ea1}n", "banj shows bạn")
+    erase(&session)
+    _ = type(&session, "banj")
+    expect(session.display(none), "b\u{1ea1}n", "banj shows bạn after the retype")
+    // An earlier correction is undone from the other side.
+    var taught = none
+    taught.adjust = ["sex": 1]
+    session = Session()
+    _ = type(&session, "sex", taught)
+    erase(&session)
+    expect(type(&session, "sex", taught), Correction(word: "sex", adjust: 0), "sex taught English, then turned back")
+    // Case does not matter.
+    session = Session()
+    _ = type(&session, "Sex")
+    erase(&session)
+    expect(type(&session, "sex"), Correction(word: "sex", adjust: 1), "case is ignored")
+
+    // Backspace has other uses: none of these is a correction.
+    session = Session()
+    _ = type(&session, "sex")
+    erase(&session)
+    expect(type(&session, "sez"), nil, "a typo fix is another word")
+    erase(&session)
+    expect(type(&session, "sex"), nil, "a departed word is forgotten")
+    session = Session()
+    _ = type(&session, "sex")
+    _ = session.pop()
+    expect(type(&session, "x"), nil, "a partial delete")
+    session = Session()
+    _ = type(&session, "sex")
+    erase(&session)
+    _ = session.push(" ")
+    expect(type(&session, "sex"), nil, "another key between")
+    session = Session()
+    _ = type(&session, "as")
+    erase(&session)
+    expect(type(&session, "as"), nil, "a Telex word of two letters")
+    session = Session()
+    _ = type(&session, "hello")
+    erase(&session)
+    expect(type(&session, "hello"), nil, "one text only, nothing to choose")
+    session = Session()
+    _ = type(&session, "sex")
+    session.clear()
+    expect(type(&session, "sex"), nil, "Esc is no erase")
+    var raw = none
+    raw.restoreRaw = false
+    session = Session()
+    _ = type(&session, "sex", raw)
+    erase(&session)
+    expect(type(&session, "sex", raw), nil, "raw restore off")
+
+    // A word the user committed and then deleted in the document.
+    func commit(_ session: inout Session, _ keys: String, boundary: Character = " ") -> String {
+        for ch in keys { _ = session.push(ch) }
+        precondition(session.push(boundary) == .commit)
+        return session.finish(none)
+    }
+    func delete(_ session: inout Session, _ count: Int) {
+        for _ in 0..<count { session.deleted() }
+    }
+    session = Session()
+    var text = commit(&session, "sex")
+    expect(text, "s\u{1ebd}", "committed as sẽ")
+    delete(&session, text.count + 1)
+    expect(type(&session, "sex"), Correction(word: "sex", adjust: 1), "retyped after the commit")
+    session = Session()
+    text = commit(&session, "sex")
+    delete(&session, text.count)
+    expect(type(&session, "sex"), nil, "the boundary key is still there")
+    session = Session()
+    text = commit(&session, "sex")
+    delete(&session, text.count + 2)
+    expect(type(&session, "sex"), nil, "one delete too many")
+    session = Session()
+    text = commit(&session, "sex")
+    delete(&session, 1)
+    _ = session.push("a")
+    delete(&session, text.count)
+    expect(type(&session, "sex"), nil, "typing in between")
+    session = Session()
+    text = commit(&session, "sex")
+    delete(&session, text.count + 1)
+    session.forgetContext()
+    expect(type(&session, "sex"), nil, "the caret moved")
+    // The erased word does not count as the word before it.
+    session = Session()
+    _ = commit(&session, "xinf")
+    text = commit(&session, "test")
+    delete(&session, text.count + 1)
+    expect(type(&session, "test"), Correction(word: "test", adjust: -1), "context from before the erased word")
+}
+
+/// A tone key typed twice undoes the tone. When the undone text is a word the lists know as English, that is
+/// what the user reached for (`coss` is `cos`). Any other word keeps every key it was typed with.
+func checkToneUndo() {
+    for (typed, want) in [
+        ("coss", "cos"), ("noss", "nos"), ("giff", "gif"), ("sexx", "sex"), ("boxx", "box"),
+        ("Coss", "Cos"), ("COSS", "COS"),
+    ] { check(typed, want) }
+    expect(Engine.render("coss", Settings(), after: .vietnamese), "cos", "coss after Vietnamese")
+    // The letters after the undo key continue the word.
+    check("cosst", "cost")
+    // English words that need both keys stay whole, and so does any word the lists do not know.
+    for word in [
+        "boss", "pass", "class", "mass", "less", "loss", "miss", "off", "carry", "marry", "buff", "ass",
+        "address", "assert", "assertEqual", "assist", "error", "staff", "success", "process", "message", "coffee",
+        "banjj", "hocjj",
+    ] { check(word, word) }
+    // Marks undo the same way.
+    for (typed, want) in [("tooo", "too"), ("seee", "see"), ("saww", "saw")] { check(typed, want) }
+    // The word counts as English afterwards.
+    var session = Session()
+    for ch in "coss" { _ = session.push(ch) }
+    expect(session.finish(Settings()), "cos", "committed as cos")
+    for ch in "as" { _ = session.push(ch) }
+    expect(session.display(Settings()), "as", "as after English")
 }
 
 func checkContext() {
@@ -548,7 +625,7 @@ func checkContext() {
 
     func typed(_ session: inout Session, _ word: String) -> String {
         for ch in word { _ = session.push(ch) }
-        return session.finish(s, expand: false)
+        return session.finish(s)
     }
     var session = Session()
     expect(typed(&session, "commit"), "commit", "english word")
@@ -566,7 +643,7 @@ func checkContext() {
     expect(typed(&session, "as"), "\u{00e1}", "as after a sentence end")
     for ch in "commit" { _ = session.push(ch) }
     expect(session.push("."), .commit, "dot commits")
-    _ = session.finish(s, expand: false)
+    _ = session.finish(s)
     expect(session.push(" "), .pass, "space after the word and dot")
     expect(typed(&session, "as"), "\u{00e1}", "as after word and dot")
     // Context is forgotten on request.
@@ -581,17 +658,10 @@ func checkContext() {
     var forgotten = Session()
     for ch in "xinf" { _ = forgotten.push(ch) }
     _ = forgotten.push(" ")
-    _ = forgotten.finish(s, expand: false)
+    _ = forgotten.finish(s)
     forgotten.forgetContext()
     var fresh = Session()
     expect(afterDot(&forgotten), afterDot(&fresh), "forgetContext matches a fresh session")
-    // A macro says nothing about the language.
-    var macro = s
-    macro.macros = [Macro(shortcut: "vn", text: "vi\u{1ec7}t nam")]
-    _ = typed(&session, "commit")
-    for ch in "vn" { _ = session.push(ch) }
-    expect(session.finish(macro, expand: true), "vi\u{1ec7}t nam", "macro expands")
-    expect(typed(&session, "as"), "as", "macro keeps the earlier language")
 }
 
 /// Types a line the way the controller does: each key joins the word, or ends it.
@@ -601,18 +671,18 @@ func typeLine(_ line: String, _ settings: Settings = Settings()) -> String {
     for ch in line {
         var answer = session.push(ch)
         if answer == .flush {
-            document += session.finish(settings, expand: false)
+            document += session.finish(settings)
             answer = session.push(ch)
         }
         switch answer {
         case .consumed, .flush, .cheat: break
         case .pass: document.append(ch)
         case .commit:
-            document += session.finish(settings, expand: true)
+            document += session.finish(settings)
             document.append(ch)
         }
     }
-    return document + session.finish(settings, expand: false)
+    return document + session.finish(settings)
 }
 
 /// A word glued to code punctuation is code, not Vietnamese.
@@ -649,7 +719,7 @@ func checkRawRestore() {
     // The word was English, so the next ambiguous word stays English.
     for ch in "as" { _ = session.push(ch) }
     expect(session.display(none), "as", "as after Esc")
-    _ = session.finish(none, expand: false)
+    _ = session.finish(none)
     var noww = Session()
     for ch in "noww" { _ = noww.push(ch) }
     expect(noww.display(none), "now", "undone mark")
@@ -945,8 +1015,6 @@ struct TestRunner {
     static func main() {
         for (raw, want) in telex { check(raw, want) }
         checkSettings()
-        checkMacroStorage()
-        checkMacroProblems()
         checkAppRules()
         checkEncoding()
         checkStats()
@@ -957,12 +1025,15 @@ struct TestRunner {
         checkCapture()
         checkFeedbackEvent()
         checkRelease()
-        checkLoadTiming()
-        checkExpansion()
+        checkAnalyzeTiming()
         checkShorthand()
         checkAttested()
-        checkKeepEnglish()
+        checkBuiltInEnglish()
         checkContext()
+        checkScore()
+        checkAdjustStore()
+        checkCorrection()
+        checkToneUndo()
         checkLateCircumflex()
         checkCodeContext()
         checkRawRestore()

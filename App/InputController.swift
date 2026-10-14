@@ -73,24 +73,24 @@ final class AnkeyInputController: IMKInputController {
     override func inputText(_ string: String!, client sender: Any!) -> Bool {
         let ctx = context(sender)
         if !ctx.rule.enabled {
-            commit(sender, ctx, expand: false)
+            commit(sender, ctx)
             return false
         }
         guard let string, string.count == 1, let ch = string.first else {
-            commit(sender, ctx, expand: false)
+            commit(sender, ctx)
             return false
         }
         switch session.push(ch) {
         case .consumed:
-            refresh(sender, ctx)
+            refresh(sender, learn(session.correction(ctx.settings), sender, ctx))
             return true
         case .pass:
             return false
         case .commit:
-            commit(sender, ctx, expand: true)
+            commit(sender, ctx)
             return false
         case .flush:
-            commit(sender, ctx, expand: false)
+            commit(sender, ctx)
             return inputText(string, client: sender)
         case .cheat(let trigger):
             switch trigger {
@@ -108,14 +108,17 @@ final class AnkeyInputController: IMKInputController {
         let name = selector.map(NSStringFromSelector) ?? ""
         let ctx = context(sender)
         if name == "deleteBackward:" {
-            guard session.pop() else { return false }
+            guard session.pop() else {
+                session.deleted()
+                return false
+            }
             refresh(sender, ctx)
             return true
         }
         if name == "cancelOperation:" {
             guard session.isComposing else { return false }
             if session.isHolding {
-                commit(sender, ctx, expand: false)
+                commit(sender, ctx)
                 return false
             }
             if session.display(ctx.settings) != session.raw {
@@ -124,7 +127,7 @@ final class AnkeyInputController: IMKInputController {
                 return true
             }
             guard ctx.settings.escClears else {
-                commit(sender, ctx, expand: false)
+                commit(sender, ctx)
                 return false
             }
             session.clear()
@@ -132,9 +135,16 @@ final class AnkeyInputController: IMKInputController {
             return true
         }
         let endsLine = name == "insertNewline:" || name == "insertTab:"
-        if session.isComposing { commit(sender, ctx, expand: endsLine) }
+        if session.isComposing { commit(sender, ctx) }
         if endsLine { session.forgetContext() }
         return false
+    }
+
+    /// A word that was erased and typed again takes the other language from now on. The next key reads it.
+    private func learn(_ correction: Correction?, _ sender: Any!, _ ctx: Context) -> Context {
+        guard let correction else { return ctx }
+        AdjustStore.shared.set(correction.word, to: correction.adjust)
+        return context(sender)
     }
 
     override func composedString(_ sender: Any!) -> Any! {
@@ -143,12 +153,12 @@ final class AnkeyInputController: IMKInputController {
     }
 
     override func commitComposition(_ sender: Any!) {
-        commit(sender, context(sender), expand: false)
+        commit(sender, context(sender))
     }
 
     override func deactivateServer(_ sender: Any!) {
         endCapture()
-        commit(sender, context(sender), expand: false)
+        commit(sender, context(sender))
         session.forgetContext()
     }
 
@@ -206,7 +216,7 @@ final class AnkeyInputController: IMKInputController {
     /// `///feedback`, `///bug` and the menu item all open a report here. A word still composing is typed
     /// out as it is, and a held cheat code disappears from the app.
     private func openReport(_ kind: ReportKind, _ sender: Any!, _ ctx: Context) {
-        commit(sender, ctx, expand: false)
+        commit(sender, ctx)
         refresh(sender, ctx)
         let anchor = caretRect(sender)
         MainActor.assumeIsolated { FeedbackFlow.shared.start(kind, settings: ctx.settings, anchor: anchor) }
@@ -230,13 +240,13 @@ final class AnkeyInputController: IMKInputController {
     /// The caret may now sit anywhere, so the words typed before say nothing about the next one.
     private func leaveWord(_ sender: Any!) {
         endCapture()
-        commit(sender, context(sender), expand: false)
+        commit(sender, context(sender))
         session.forgetContext()
     }
 
-    private func commit(_ sender: Any!, _ ctx: Context, expand: Bool) {
+    private func commit(_ sender: Any!, _ ctx: Context) {
         let raw = session.raw
-        let word = session.finish(ctx.settings, expand: expand)
+        let word = session.finish(ctx.settings)
         if let event = statsEvent(raw: raw, committed: word) { StatsStore.record(event) }
         finalize(word, sender, ctx)
     }

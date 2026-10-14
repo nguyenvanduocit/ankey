@@ -6,9 +6,12 @@ import Foundation
 /// kept when the engine converts them and the word has three letters or more. Shorter ones are Telex
 /// itself: `aj` is `ạ`, `oo` is `ô`. Each word falls in a band by how common its converted form is in
 /// Vietnamese, ranked by hermitdave/FrequencyWords (vi, 2018):
-///   - under 500: left out, the Vietnamese word wins (`cos` is `có`, `nos` is `nó`);
+///   - under 500: `known`, the Vietnamese word wins by default (`cos` is `có`, `nos` is `nó`). The word is still
+///     known as English, so a doubled tone key (`coss`) or a correction can turn it English;
 ///   - 500 to 8000: `context`, English only right after an English word (`last` is `lát`, `chaos` is `cháo`);
 ///   - 8000 and up, or not ranked: `always`, English everywhere (`reset` is not `rết`).
+/// `always` also holds the English words whose doubled tone key reads as a listed word (`pass` is `pas`,
+/// `off` is `of`): the 28 words of the 20k list where that happens, so `Engine.analyze` keeps their keys.
 /// Placed by hand: `test`, `list`, `box`, `asap` and the short words people used to list themselves go to
 /// `always`, and `as`, `car`, `too`, `own`, `var`, `max`, `ref`, `docs` and the rest of the old pairs stay in `context`.
 /// The built-in list lives in code, not in `UserDefaults`, so an update reaches users who already saved settings.
@@ -16,23 +19,34 @@ enum English {
     /// Typed keys, lowercase.
     static let always: Set<String> = Set(alwaysSource.split(whereSeparator: \.isWhitespace).map(String.init))
     static let context: Set<String> = Set(contextSource.split(whereSeparator: \.isWhitespace).map(String.init))
+    static let known: Set<String> = Set(knownSource.split(whereSeparator: \.isWhitespace).map(String.init))
+    /// The built-in score of every word the lists know as English: 2 for `always`, 1 for `context`, 0 for
+    /// `known`. A word that is not here has no English side.
+    static let band: [String: Int] = {
+        var band: [String: Int] = [:]
+        for word in known { band[word] = 0 }
+        for word in context { band[word] = 1 }
+        for word in always { band[word] = 2 }
+        return band
+    }()
 }
 
 private let alwaysSource = """
-aac aca apa asap ata bays beech best bins bono boom boot born bots bows box bur burn burns busy
-buys caa cary chairs charm chars charts chats cheer choir chose chow coco como cons coop cops corn
-corps cosmos cost costs cox dar darn darts das data dawn dems des dex dir disc discs dist donors
-doom door doors doris dots downs dust ecs een ems ers esc est gaps gary gifs gis goto gown gus
-guts haas hamas harm has hays her here hex hips his honors hoop horn horns horse horses hose host
-hosts how huns ics if inf ins is keen keep kern kits kos laps law laws lays les lips lisa lisp
-list lists loans lois loop lore loren lose loser losers loses lows luis majors mana manga mans mar
-mary meet meets mens mes meters mips mis misc mix moms most mus napa nas nero nis noir nor norm
-now nox nur of ons oops ops or ora ore osx pans par parts pas past paw pee peers pers peso pesos
-pest pests pete peters pets photo photos pics pits pow queens queue ras raw rays reef res rest
-rims roms room root ros rosa row rows runs rus sar sars sas sata saw saws sax sees ses sins sis
-sits six soar sofa sofas sons soon sos sox suns sur surf sus tata taxi tens term terms test tests
-tex texts thats there these this tips toes tops torn tos town towns traps tree trees tres turn
-turns urn urw us usa usr vary voor vos xerox
+aac aca apa asap ass asst ata barr bass bays beech best bins bono boom boot born boss bots bows box
+buff bur burn burns burr busy buys caa carr carry cary cass chairs charm chars charts chats cheer
+choir chose chow coco como cons coop cops corn corps corr cosmos cost costs cox dar darn darts das
+data dawn dems des dex dir disc discs dist donors doom door doors doris dots downs dust ecs een ems
+ers esc est gaps gary gifs gis goto gown gus guts haas hamas harm has hays her here hess hex hips
+his honors hoop horn horns horse horses hose host hosts how huns ics if inf ins is iss keen keep
+kern kits kos laps law laws lays les less lips lisa lisp list lists loans lois loop lore loren lose
+loser losers loses loss lows luis majors mana manga mans mar marry mary mass meet meets mens mes
+mess meters mips mis misc miss mix moms moss most mus napa nas nero ness nis noir nor norm now nox
+nur of off ons oops ops or ora ore osx pans par parts pas pass past paw pee peers perez pers peso
+pesos pest pests pete peters pets photo photos pics pits pow queens queue ras raw rays reef res rest
+rims roms room root ros rosa ross row rows runs rus russ sar sars sas sata saw saws sax sees ses
+sins sis sits six soar sofa sofas sons soon sos sox suns sur surf sus tata taxi tens term terms test
+tests tex texts thats there these this tips toes tops torn tos toss town towns traps tree trees tres
+turn turns urn urw us usa usr uss vary voor vos xerox
 """
 
 private let contextSource = """
@@ -48,4 +62,9 @@ nuts oasis orf ors own owns per pharma quest raf rama rams rats ref rene rests r
 sans secs see seen ser sets sex sir songs soo sorts taj taps tar tas tax taxis tee tees ter tes
 testers thee ther thor tis tits toast too toon toons tor tori tow trans trust trusts turf tyr ups
 uri usc usps vans var vast vest vests vets virus vis visa visas vor vows vox xoops
+"""
+
+private let knownSource = """
+asf barn cams cas conf congo cos cow dana gif har homo ist its lex lys nos quasi queen teen theme
+thurs thus ver yrs
 """

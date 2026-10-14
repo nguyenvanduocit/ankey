@@ -4,6 +4,7 @@ import UniformTypeIdentifiers
 
 struct GeneralTab: View {
     @ObservedObject var model: SettingsModel
+    @State private var learned = AdjustStore.shared.words
 
     var body: some View {
         PixelPage {
@@ -48,41 +49,22 @@ struct GeneralTab: View {
                     isOn: $model.value.escClears
                 )
             }
-        }
-    }
-}
 
-struct MacroRow: View {
-    @Binding var macro: Macro
-    let problem: Macro.Problem?
-    let onDelete: () -> Void
-
-    private var problemText: String? {
-        switch problem {
-        case .badShortcut: return "Chỉ dùng chữ a–z"
-        case .emptyText: return "Thiếu nội dung"
-        case .duplicate: return "Trùng"
-        case nil: return nil
-        }
-    }
-
-    var body: some View {
-        HStack(spacing: 2 * Pixel.unit) {
-            TextField("Phím tắt", text: $macro.shortcut, prompt: Text("Phím tắt"))
-                .labelsHidden()
-                .pixelField()
-                .frame(width: 110)
-            Text("»").foregroundStyle(Pixel.accent)
-            TextField("Nội dung", text: $macro.text, prompt: Text("Nội dung"))
-                .labelsHidden()
-                .pixelField()
-            if let problemText {
-                Text(problemText)
-                    .font(Pixel.font(15))
-                    .foregroundStyle(Pixel.danger)
+            if !learned.isEmpty {
+                PixelSection(
+                    title: "Từ Ankey đã học",
+                    footer: "Ankey đổi nhầm thì xoá cả từ rồi gõ lại đúng phím đó: từ ấy chuyển sang cách còn lại và được nhớ ở đây. Bấm xoá để quên."
+                ) {
+                    ForEach(learned.keys.sorted(), id: \.self) { word in
+                        WordRow(word: "\(word)  \((learned[word] ?? 0) > 0 ? "giữ nguyên" : "ghép dấu")") {
+                            AdjustStore.shared.set(word, to: 0)
+                            learned = AdjustStore.shared.words
+                        }
+                    }
+                }
             }
-            PixelRemoveButton(action: onDelete)
         }
+        .onAppear { learned = AdjustStore.shared.words }
     }
 }
 
@@ -99,29 +81,12 @@ struct WordRow: View {
     }
 }
 
-struct MacrosTab: View {
+struct ShorthandTab: View {
     @ObservedObject var model: SettingsModel
     @State private var newWord = ""
-    @State private var newEnglish = ""
 
     var body: some View {
-        let problems = Macro.problems(in: model.value.macros)
         PixelPage {
-            PixelSection(
-                title: "Mở rộng văn bản",
-                footer: "Gõ phím tắt rồi bấm cách để thay bằng nội dung. Chữ hoa của phím tắt được áp vào kết quả."
-            ) {
-                ForEach($model.value.macros) { $macro in
-                    MacroRow(macro: $macro, problem: problems[macro.id]) {
-                        model.value.macros.removeAll { $0.id == macro.id }
-                    }
-                }
-                Button("Thêm phím tắt") {
-                    model.value.macros.append(Macro(shortcut: "", text: ""))
-                }
-                .buttonStyle(PixelButtonStyle())
-            }
-
             PixelSection(title: "Từ viết tắt") {
                 PixelToggle(
                     title: "Cho phép từ viết tắt",
@@ -144,39 +109,7 @@ struct MacrosTab: View {
                 }
             }
             .disabled(!model.value.restoreRaw)
-
-            PixelSection(
-                title: "Từ tiếng Anh giữ nguyên",
-                footer: "Ankey đã có sẵn hơn 200 từ tiếng Anh thường gặp như reset, boot, test. Thêm từ của bạn ở đây, chúng luôn ra đúng chữ đã gõ. Cần bật mục giữ nguyên chữ ở tab Chung."
-            ) {
-                ForEach(model.value.keepEnglish, id: \.self) { word in
-                    WordRow(word: word) {
-                        model.value.keepEnglish.removeAll { $0 == word }
-                    }
-                }
-                HStack(spacing: 2 * Pixel.unit) {
-                    TextField("Từ mới", text: $newEnglish, prompt: Text("Từ mới, ví dụ test"))
-                        .labelsHidden()
-                        .pixelField()
-                        .onSubmit(addEnglish)
-                    Button("Thêm", action: addEnglish)
-                        .buttonStyle(PixelButtonStyle())
-                        .disabled(normalizedNewEnglish.isEmpty)
-                }
-            }
-            .disabled(!model.value.restoreRaw)
         }
-    }
-
-    private var normalizedNewEnglish: String {
-        newEnglish.trimmingCharacters(in: .whitespaces).lowercased()
-    }
-
-    private func addEnglish() {
-        let word = normalizedNewEnglish
-        guard !word.isEmpty, !model.value.keepEnglish.contains(word) else { return }
-        model.value.keepEnglish.append(word)
-        newEnglish = ""
     }
 
     private var normalizedNewWord: String {

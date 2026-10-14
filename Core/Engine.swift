@@ -14,6 +14,12 @@ enum Push: Equatable {
     case cheat(Trigger)
 }
 
+/// The score a word should have from now on, learned from the user erasing it and typing it again.
+struct Correction: Equatable {
+    let word: String
+    let adjust: Int
+}
+
 struct Session {
     private(set) var raw = ""
     /// A `/` at the start of a word is held as typed while it can still become a cheat code (`///bug`).
@@ -30,6 +36,22 @@ struct Session {
     private var afterVietnamese = false
     /// The word follows code punctuation with no space (`my_var`), so it is code and stays as typed.
     private var glued = false
+    /// The keys of the whole word the user erased with backspace. Typing them again is a correction.
+    private var erased: String?
+    /// The keys the word had when the current run of backspaces began.
+    private var erasing: String?
+    /// The word just committed, while backspaces take it out of the document.
+    private var committed: Committed?
+
+    private struct Committed {
+        var keys: String
+        /// Characters of the document still to delete: the word and its boundary key.
+        var remaining: Int
+        /// The context from before the word, so the retype is judged the way the word was.
+        var previous: Language?
+        var glued: Bool
+        var afterVietnamese: Bool
+    }
 
     /// Keys that join two words into one code token. Only characters that never open a phrase in
     /// prose are here: `/` (và/hoặc), brackets (`[hoàn thành]`) and `*` (bold) also appear in Vietnamese.
@@ -49,17 +71,15 @@ struct Session {
         glue.contains(ch) || (ch == "." && !afterVietnamese)
     }
 
-    /// The text a finished word becomes. `expand` is true only for word-ending keys.
-    func committed(_ settings: Settings, expand: Bool) -> String {
-        if expand, let text = Engine.expansion(for: raw, settings) { return text }
-        return display(settings)
-    }
-
     /// Commits the word and remembers its language for the next one.
-    mutating func finish(_ settings: Settings, expand: Bool) -> String {
-        let text = committed(settings, expand: expand)
-        let expanded = expand && Engine.expansion(for: raw, settings) != nil
-        let language = expanded ? nil : Engine.analyze(raw, settings, after: previous, glued: glued).language
+    mutating func finish(_ settings: Settings) -> String {
+        let text = display(settings)
+        let language = Engine.analyze(raw, settings, after: previous, glued: glued).language
+        let word = Committed(
+            keys: raw.lowercased(), remaining: text.count + 1,
+            previous: previous, glued: glued, afterVietnamese: afterVietnamese
+        )
+        let endedByKey = boundary != nil
         glued = boundary.map { Self.glues($0, afterVietnamese: language == .vietnamese) } ?? false
         afterVietnamese = language == .vietnamese
         boundary = nil
@@ -71,6 +91,8 @@ struct Session {
         endsSentence = false
         raw = ""
         held = ""
+        forgetCorrection()
+        committed = endedByKey && !word.keys.isEmpty ? word : nil
         return text
     }
 
@@ -84,6 +106,7 @@ struct Session {
         glued = false
         afterVietnamese = false
         boundary = nil
+        forgetCorrection()
         return text
     }
 
@@ -91,18 +114,34 @@ struct Session {
         previous = nil
         glued = false
         afterVietnamese = false
+        forgetCorrection()
+    }
+
+    private mutating func forgetCorrection() {
+        erased = nil
+        erasing = nil
+        committed = nil
     }
 
     mutating func push(_ ch: Character) -> Push {
-        if isHolding { return pushHeld(ch) }
+        if isHolding {
+            forgetCorrection()
+            return pushHeld(ch)
+        }
         if detectsTriggers, raw.isEmpty, ch == "/" {
+            forgetCorrection()
             held = "/"
             return .consumed
         }
         if Engine.isComposing(ch) {
             raw.append(ch)
+            erasing = nil
+            committed = nil
+            // A letter that leaves the erased keys is another word.
+            if let keys = erased, !keys.hasPrefix(raw.lowercased()) { erased = nil }
             return .consumed
         }
+        forgetCorrection()
         let sentenceEnd = ".!?".contains(ch)
         if raw.isEmpty {
             if sentenceEnd { previous = nil }
@@ -132,13 +171,48 @@ struct Session {
             return true
         }
         guard !raw.isEmpty else { return false }
+        if erasing == nil { erasing = raw.lowercased() }
         raw.removeLast()
+        if raw.isEmpty { erased = erasing }
         return true
+    }
+
+    /// A backspace that went to the app because no word was composing. Once it has taken out the committed
+    /// word and its boundary key, the word counts as erased, in the context it had when it was typed.
+    mutating func deleted() {
+        guard var word = committed else {
+            erased = nil
+            return
+        }
+        word.remaining -= 1
+        if word.remaining > 0 {
+            committed = word
+            return
+        }
+        committed = nil
+        previous = word.previous
+        glued = word.glued
+        afterVietnamese = word.afterVietnamese
+        erased = word.keys
+    }
+
+    /// The new score of the word when its keys were erased and typed again, and the other text was a real
+    /// choice. Short words are Telex itself (`as` is `á`), so they say nothing. Fires once.
+    mutating func correction(_ settings: Settings) -> Correction? {
+        guard let keys = erased, raw.count >= 3, raw.lowercased() == keys else { return nil }
+        erased = nil
+        guard let score = Engine.contest(raw, settings, after: previous, glued: glued) else { return nil }
+        // The retype moves the word to the side it was not shown on, by as much as it takes.
+        let step = score >= Engine.englishThreshold ? Engine.englishThreshold - 1 - score : Engine.englishThreshold - score
+        let moved = (settings.adjust[keys] ?? 0) + step
+        let range = AdjustStore.range
+        return Correction(word: keys, adjust: min(max(moved, range.lowerBound), range.upperBound))
     }
 
     mutating func clear() {
         raw = ""
         held = ""
+        forgetCorrection()
     }
 }
 
@@ -148,6 +222,15 @@ enum Language {
 }
 
 enum Engine {
+    /// A word at this score or above stays as typed.
+    static let englishThreshold = 2
+
+    /// How English a word looks: its built-in band, one more right after an English word, plus what
+    /// Ankey learned from corrections. The language of a word that Telex could convert is decided here.
+    static func englishness(_ word: String, after previous: Language?, adjust: [String: Int]) -> Int {
+        (English.band[word] ?? 0) + (previous == .english ? 1 : 0) + (adjust[word] ?? 0)
+    }
+
     static func isComposing(_ ch: Character) -> Bool {
         ch.isASCII && ch.isLetter
     }
@@ -158,11 +241,8 @@ enum Engine {
         analyze(raw, settings, after: previous, glued: glued).text
     }
 
-    /// The text a word shows and the language it reveals. `language` is nil when the
-    /// word reads the same in both. `previous` is the language of the word before it.
-    static func analyze(
-        _ raw: String, _ settings: Settings, after previous: Language?, glued: Bool = false
-    ) -> (text: String, language: Language?) {
+    /// What Telex makes of the keys: the atoms, the tone, the converted text and the keys as typed.
+    private static func telex(_ raw: String, _ settings: Settings) -> (atoms: [Atom], tone: Tone, out: String, literal: String) {
         var atoms: [Atom] = []
         var tone = Tone.none
         var toneFrom: Character?
@@ -177,33 +257,43 @@ enum Engine {
             if !undidMark { literal.append(ch) }
         }
         atoms = normalizeHorn(atoms)
-        let out = compose(atoms, tone: tone, style: settings.toneStyle)
+        return (atoms, tone, compose(atoms, tone: tone, style: settings.toneStyle), literal)
+    }
+
+    /// The score of a word that has two texts to choose from: Telex converts it into a syllable the engine
+    /// accepts, and the converted text differs from the typed keys. Any other word has nothing left to decide.
+    /// The typed keys are a choice only for a word the built-in lists know as English, so a correction never
+    /// turns `banj` or `tooi` into English.
+    static func contest(_ raw: String, _ settings: Settings, after previous: Language?, glued: Bool) -> Int? {
+        guard settings.restoreRaw, !glued, English.band[raw.lowercased()] != nil else { return nil }
+        let (atoms, tone, out, literal) = telex(raw, settings)
+        guard out != literal else { return nil }
+        let abbreviation = settings.abbreviation && settings.shorthand.contains(out.lowercased())
+        guard isRealSyllable(atoms, tone: tone, style: settings.toneStyle) || abbreviation else { return nil }
+        return englishness(raw.lowercased(), after: previous, adjust: settings.adjust)
+    }
+
+    /// The text a word shows and the language it reveals. `language` is nil when the
+    /// word reads the same in both. `previous` is the language of the word before it.
+    static func analyze(
+        _ raw: String, _ settings: Settings, after previous: Language?, glued: Bool = false
+    ) -> (text: String, language: Language?) {
+        let (atoms, tone, out, literal) = telex(raw, settings)
         let language: Language? = out == literal ? nil : .vietnamese
         guard settings.restoreRaw else { return (out, language) }
         if glued { return (literal, .english) }
         let word = raw.lowercased()
-        if English.always.contains(word) || settings.keepEnglish.contains(word)
-            || (previous == .english && English.context.contains(word)) {
+        if englishness(word, after: previous, adjust: settings.adjust) >= englishThreshold {
             return (literal, .english)
         }
         let abbreviation = settings.abbreviation && settings.shorthand.contains(out.lowercased())
         guard isRealSyllable(atoms, tone: tone, style: settings.toneStyle) || abbreviation else {
+            // A tone key typed twice undid the tone. When the undone text is a word the lists know as English,
+            // that is what the user reached for (`coss` is `cos`). Any other word keeps its keys (`boss`).
+            if out != literal, English.band[out.lowercased()] != nil { return (out, .english) }
             return (literal, .english)
         }
         return (out, language)
-    }
-
-    /// Looks the typed keys up in the macro table and copies the typed case onto the text.
-    /// The table comes from `Settings.load()`, so its shortcuts are already lowercase.
-    static func expansion(for raw: String, _ settings: Settings) -> String? {
-        guard let first = raw.first else { return nil }
-        let key = raw.lowercased()
-        guard let macro = settings.macros.first(where: { $0.shortcut == key }) else { return nil }
-        if raw.count >= 2, raw.allSatisfy(\.isUppercase) { return macro.text.uppercased() }
-        if first.isUppercase, raw.dropFirst().allSatisfy(\.isLowercase) {
-            return macro.text.prefix(1).uppercased() + String(macro.text.dropFirst())
-        }
-        return macro.text
     }
 }
 

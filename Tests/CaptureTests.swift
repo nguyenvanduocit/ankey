@@ -72,25 +72,25 @@ func checkTriggers() {
     session = Session()
     type("///anke", into: &session)
     expect(session.push("x"), .flush, "a wrong letter after ///anke flushes")
-    expect(session.finish(Settings(), expand: false), "///anke", "the prefix commits as typed")
+    expect(session.finish(Settings()), "///anke", "the prefix commits as typed")
 
     // A key that cannot extend the code flushes the held text. The caller commits it and pushes the key again.
     session = Session()
     expect(type("/", into: &session), .consumed, "lone slash is held")
     expect(session.push("a"), .flush, "a letter after one slash flushes")
-    expect(session.finish(Settings(), expand: true), "/", "flush commits the slash")
+    expect(session.finish(Settings()), "/", "flush commits the slash")
     expect(session.isComposing, false, "flush leaves nothing pending")
     expect(session.push("a"), .consumed, "the flushed key starts a word")
 
     session = Session()
     type("//", into: &session)
     expect(session.push(" "), .flush, "space after two slashes flushes")
-    expect(session.finish(Settings(), expand: true), "//", "two slashes commit as typed")
+    expect(session.finish(Settings()), "//", "two slashes commit as typed")
 
     session = Session()
     type("///bu", into: &session)
     expect(session.push("x"), .flush, "a wrong letter flushes")
-    expect(session.finish(Settings(), expand: false), "///bu", "the prefix commits as typed")
+    expect(session.finish(Settings()), "///bu", "the prefix commits as typed")
 
     session = Session()
     type("///", into: &session)
@@ -100,7 +100,7 @@ func checkTriggers() {
     session = Session()
     expect(session.push("a"), .consumed, "word letter")
     expect(session.push("/"), .commit, "slash after a word still ends it")
-    expect(session.finish(Settings(), expand: true), "a", "the word commits before the slash")
+    expect(session.finish(Settings()), "a", "the word commits before the slash")
     expect(type("//bug", into: &session), .flush, "two more slashes and a letter do not form the code")
 
     // Backspace and Esc.
@@ -146,14 +146,6 @@ func checkCapture() {
     // Inside the buffer `///bug` is text, not a trigger.
     capture = typed("///bug ok")
     expect(capture.display(plain), "///bug ok", "slashes are plain text inside a capture")
-
-    // No macro expansion: a private shortcut must not leak its text.
-    var withMacro = Settings()
-    withMacro.macros = [Macro(shortcut: "addr", text: "1 Secret Street")]
-    capture = typed("addr ", withMacro)
-    expect(capture.display(withMacro), "addr ", "macros do not expand in feedback")
-    let leak = capture.submit(withMacro, context: context)
-    expect(leak?.text, "addr", "the report carries the typed shortcut")
 
     // Control characters never enter the buffer.
     capture = typed("a\nb\tc\r")

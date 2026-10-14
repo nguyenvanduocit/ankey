@@ -76,7 +76,7 @@ private extension AppMode {
 }
 
 /// The text of a report while the user types it. Words go through the same Telex engine as normal
-/// typing and are never expanded by macros, so a private shortcut cannot leak into a report.
+/// typing.
 struct Capture {
     enum Phase: Equatable {
         case typing
@@ -113,7 +113,7 @@ struct Capture {
         case .pass:
             done.append(ch)
         case .commit:
-            done += word.finish(settings, expand: false) + String(ch)
+            done += word.finish(settings) + String(ch)
         case .flush, .cheat:
             // Only a session that detects triggers answers this way, and this one does not.
             break
@@ -130,7 +130,7 @@ struct Capture {
     /// send or a send is already under way.
     mutating func submit(_ settings: Settings, context: FeedbackContext) -> FeedbackReport? {
         guard phase != .sending else { return nil }
-        done += word.finish(settings, expand: false)
+        done += word.finish(settings)
         let text = done.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return nil }
         phase = .sending

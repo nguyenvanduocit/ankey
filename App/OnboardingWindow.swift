@@ -153,7 +153,7 @@ struct OnboardingView: View {
             PixelSection(title: "3. Còn gì nữa") {
                 Text("Esc trả lại chữ đã gõ: Ankey đã đổi test thành tét thì bấm Esc để về test.")
                 Text("Mỗi ứng dụng chọn tắt Ankey, gạch chân hoặc chèn trực tiếp ở thẻ Ứng dụng.")
-                Text("Phím tắt và từ viết tắt nằm ở thẻ Gõ tắt.")
+                Text("Từ viết tắt như đc nằm ở thẻ Viết tắt.")
             }
             PixelSection(
                 title: "Mã gõ nhanh",
@@ -173,18 +173,15 @@ struct HelpView: View {
     let onFinish: () -> Void
 
     private static let questions: [(question: String, answer: String)] = [
-        // README "Phân biệt tiếng Anh và tiếng Việt"; Settings → Gõ tắt → Từ tiếng Anh giữ nguyên.
+        // README "Phân biệt tiếng Anh và tiếng Việt"; `Session.correction`; Settings → Chung → Từ Ankey đã học.
         ("Sao chữ tiếng Anh không bị đổi dấu?",
-         "Ankey chỉ đổi khi kết quả là một âm tiết tiếng Việt có thật, và đã có sẵn hơn 200 từ tiếng Anh hay gặp như reset, test. Từ của bạn thêm ở thẻ Gõ tắt → Từ tiếng Anh giữ nguyên."),
+         "Ankey chỉ đổi khi kết quả là một âm tiết tiếng Việt có thật, và đã có sẵn hơn 200 từ tiếng Anh hay gặp như reset, test. Từ nào vẫn đổi nhầm thì xoá cả từ rồi gõ lại đúng phím đó: Ankey nhớ và để từ ấy nguyên chữ đã gõ. Xem và xoá các từ đã nhớ ở thẻ Chung."),
         // InputController cancelOperation; Settings → Chung → Esc huỷ từ đang gõ.
         ("Ankey đổi nhầm, lấy lại chữ đã gõ thế nào?",
          "Bấm Esc ngay: chữ trở về đúng phím đã gõ, tét thành test. Từ chưa ghép dấu thì Esc xoá hoặc chốt từ, chọn ở thẻ Chung → Esc huỷ từ đang gõ."),
         // Settings → Ứng dụng: footer and the help on the mode choice.
         ("Tắt, Gạch chân, Trực tiếp khác nhau thế nào?",
          "Chọn ở thẻ Ứng dụng → Thêm ứng dụng…. Tắt: Ankey không gõ ở đó. Gạch chân (mặc định): chữ gạch chân tới khi chốt. Trực tiếp: Cmd+A thấy đủ chữ, một số ứng dụng không hỗ trợ."),
-        // Settings → Gõ tắt: footer and the shortcut check.
-        ("Thêm gõ tắt thế nào?",
-         "Thẻ Gõ tắt → Thêm phím tắt, nhập phím tắt (chỉ chữ a–z) và nội dung. Gõ phím tắt rồi bấm cách để thay bằng nội dung."),
         // `Trigger.all`; the Gửi góp ý… item in `AnkeyInputController.menu()`; FeedbackFlow key handling.
         ("Báo lỗi hoặc góp ý thế nào?",
          "Gõ ///feedback (góp ý) hay ///bug (báo lỗi) ở đầu từ, hoặc chọn Gửi góp ý… trong menu bộ gõ. Gõ nội dung rồi bấm Enter để gửi."),

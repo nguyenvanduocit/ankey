@@ -32,7 +32,7 @@ Gõ góp ý là lúc duy nhất Ankey gửi chữ bạn gõ, và chỉ khi bạn
 
 ## Phân biệt tiếng Anh và tiếng Việt
 
-Chỉ có luật Telex thì chưa đủ. Theo luật, `test` thành `tét` và `does` thành `doé` đều hợp lệ. Nên mình thêm ba lớp kiểm tra.
+Chỉ có luật Telex thì chưa đủ. Theo luật, `test` thành `tét` và `does` thành `doé` đều hợp lệ. Nên mình thêm bốn lớp kiểm tra.
 
 **1. Một từ phải là tiền tố của một âm tiết có thật trong tiếng Việt.** [`Syllables.swift`](Core/Syllables.swift) giữ các âm tiết đơn lấy từ Viet74K và hunspell-vi. Kết quả chuyển đổi chỉ được nhận khi nó còn là tiền tố của một âm tiết trong danh sách. `doé` qua được luật nhưng không có trong danh sách, nên từ đó giữ nguyên.
 
@@ -45,6 +45,12 @@ Chỉ có luật Telex thì chưa đủ. Theo luật, `test` thành `tét` và `
 | Từ 8000 trở lên, hoặc không có hạng | Luôn giữ tiếng Anh: `reset`, `boot`, `list`. |
 
 **3. Từ đứng trước quyết định ngôn ngữ cho các từ nhập nhằng.** Ankey nhớ từ gần nhất là tiếng Anh hay tiếng Việt. Trí nhớ này bị xoá khi gặp dấu chấm, `!`, `?`, Return, Tab, khi chuyển app, và khi con trỏ nhảy chỗ khác, vì lúc đó các từ gõ trước không còn liên quan tới từ sắp gõ. Từ dính liền với dấu câu của code (`my_var`, `user@host`, `foo.bar(x)`) giữ nguyên, trừ khi đứng sau một từ tiếng Việt, nên `ừm...tôi` vẫn chuyển bình thường.
+
+**4. Xoá cả từ rồi gõ lại đúng phím đó là lời sửa.** `sex` ra `sẽ`, bạn xoá cả từ rồi gõ lại `sex`: Ankey hiểu là chọn nhầm và từ đó giữ nguyên chữ đã gõ. Chiều ngược lại cũng vậy, `test` ép thành `tét`. Chỉ tính khi xoá hết từ và gõ lại đúng chuỗi phím, từ có từ ba chữ trở lên, và chỉ với từ nằm trong danh sách tiếng Anh có sẵn: `banj` hay `tooi` không phải từ tiếng Anh nên không bao giờ bị giữ nguyên chữ.
+
+Cách nhanh hơn: gõ `cos` ra `có`, bấm thêm một phím dấu nữa thì dấu bị huỷ và ra `cos`. Phím `s`, `f`, `r`, `x`, `j` làm vậy khi từ sau khi huỷ dấu là một từ tiếng Anh trong danh sách (`coss` ra `cos`, `sexx` ra `sex`). Từ khác giữ nguyên mọi phím đã gõ, nên `boss`, `pass`, `class`, `assertEqual` không bị đụng. Phím mũ như `oo`, `ee`, `w` thì luôn huỷ như vậy (`tooo` ra `too`). Sửa lỗi gõ (`sex` thành `sez`) hay xoá nửa chừng không đổi gì. Từ đã học hiện ở thẻ Chung, bấm xoá là quên.
+
+Ba lớp sau cùng là một điểm số cho mỗi từ: hạng có sẵn (0, 1, 2), cộng một khi từ trước là tiếng Anh, cộng điểm đã học từ lời sửa. Từ đạt 2 trở lên thì giữ nguyên chữ đã gõ. Lời sửa chỉ đẩy điểm vừa đủ để lần gõ lại đổi chiều.
 
 Các danh sách có sẵn nằm trong code, không nằm trong settings đã lưu, để mỗi lần cập nhật đều tới được cả những người đã chỉnh settings riêng.
 
@@ -65,7 +71,7 @@ Ankey không gửi gì đi, trừ khi bạn tự gửi góp ý (mục trên) ho�
 - **Ghi thống kê trên máy.** Ankey đếm số lần: từ được đổi dấu, từ giữ nguyên, Esc trả lại chữ đã gõ, chèn trực tiếp bị lệch. Chỉ lưu trên máy, giữ 30 ngày. Tắt là xoá hết.
 - **Gửi thống kê tới Datadog.** Mỗi ngày gửi tối đa một lần, chỉ các ngày đã qua. Nút Sao chép trong tab Thống kê đưa đúng dữ liệu sẽ gửi vào clipboard.
 
-Không bao giờ lưu hay gửi chữ bạn gõ, phím bấm, tên ứng dụng hay nội dung gõ tắt. Các trường được gửi nằm trong danh sách cố định ở `Tests/TestMain.swift`, thêm một trường mới thì test đỏ cho tới khi danh sách đổi theo.
+Không bao giờ lưu hay gửi chữ bạn gõ, phím bấm hay tên ứng dụng. Các trường được gửi nằm trong danh sách cố định ở `Tests/TestMain.swift`, thêm một trường mới thì test đỏ cho tới khi danh sách đổi theo.
 
 Khi bạn bật gửi, Datadog nhận:
 

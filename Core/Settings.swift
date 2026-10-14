@@ -7,56 +7,6 @@ enum ToneStyle: String {
     case classic
 }
 
-/// A text-expansion entry. `id` exists only while the app runs; two macros are equal
-/// when the saved fields match.
-struct Macro: Equatable, Identifiable {
-    var id = UUID()
-    var shortcut: String
-    var text: String
-
-    static func == (lhs: Macro, rhs: Macro) -> Bool {
-        lhs.shortcut == rhs.shortcut && lhs.text == rhs.text
-    }
-}
-
-extension Macro {
-    enum Problem {
-        case badShortcut
-        case emptyText
-        case duplicate
-    }
-
-    /// The shortcut as the engine matches it: trimmed, lowercase.
-    var normalizedShortcut: String {
-        shortcut.trimmingCharacters(in: .whitespaces).lowercased()
-    }
-
-    /// The single rule set for a usable table. The window shows these problems and
-    /// `cleaned` drops the same rows. The first valid row of a shortcut wins.
-    static func problems(in macros: [Macro]) -> [UUID: Problem] {
-        var seen = Set<String>()
-        var result: [UUID: Problem] = [:]
-        for macro in macros {
-            let key = macro.normalizedShortcut
-            if key.isEmpty || !key.allSatisfy({ $0.isASCII && $0.isLetter }) {
-                result[macro.id] = .badShortcut
-            } else if macro.text.isEmpty {
-                result[macro.id] = .emptyText
-            } else if !seen.insert(key).inserted {
-                result[macro.id] = .duplicate
-            }
-        }
-        return result
-    }
-
-    static func cleaned(_ macros: [Macro]) -> [Macro] {
-        let problems = problems(in: macros)
-        return macros
-            .filter { problems[$0.id] == nil }
-            .map { Macro(id: $0.id, shortcut: $0.normalizedShortcut, text: $0.text) }
-    }
-}
-
 enum Insertion: String {
     /// The word being typed is underlined marked text that the app holds until commit.
     case marked
@@ -132,10 +82,10 @@ struct Settings: Equatable {
     var escClears = true
     /// The encoding for apps whose rule does not set one.
     var encoding = OutputEncoding.unicode
-    var macros: [Macro] = []
     var shorthand = ["\u{0111}c"]
-    /// The user's own English words, on top of the built-in `English` lists. Typed keys, lowercase.
-    var keepEnglish: [String] = []
+    /// What Ankey learned from corrections: a score per word, added to its built-in band. Typed keys,
+    /// lowercase. `Settings.load` fills it from the `AdjustStore`, and `save` never writes it.
+    var adjust: [String: Int] = [:]
     var appRules: [AppRule] = []
     /// Counts events on this machine for the statistics tab. Off until the user turns it on.
     var collectStats = false
@@ -152,9 +102,7 @@ extension Settings {
         static let abbreviation = "abbreviation"
         static let escClears = "escClears"
         static let encoding = "encoding"
-        static let macros = "macros"
         static let shorthand = "shorthand"
-        static let keepEnglish = "keepEnglish"
         static let appRules = "appRules"
         static let excludedApps = "excludedApps"
         static let collectStats = "collectStats"
@@ -183,8 +131,9 @@ extension Settings {
     }
 
     /// A key that was never saved, or holds the wrong type, keeps its default.
-    static func load(from defaults: UserDefaults = .standard) -> Settings {
+    static func load(from defaults: UserDefaults = .standard, adjust: AdjustStore = .shared) -> Settings {
         var settings = Settings()
+        settings.adjust = adjust.words
         if let raw = defaults.string(forKey: Key.toneStyle), let style = ToneStyle(rawValue: raw) {
             settings.toneStyle = style
         }
@@ -197,18 +146,8 @@ extension Settings {
         settings.collectStats = collectsStats(in: defaults)
         settings.shareStats = settings.collectStats && defaults.bool(forKey: Key.shareStats)
         settings.onboardingSeen = defaults.bool(forKey: Key.onboardingSeen)
-        if let rows = defaults.array(forKey: Key.macros) as? [[String: String]] {
-            let macros = rows.compactMap { row -> Macro? in
-                guard let shortcut = row["shortcut"], let text = row["text"] else { return nil }
-                return Macro(shortcut: shortcut, text: text)
-            }
-            settings.macros = Macro.cleaned(macros)
-        }
         if let words = defaults.stringArray(forKey: Key.shorthand) {
             settings.shorthand = uniqueTrimmed(words, lowercased: true)
-        }
-        if let words = defaults.stringArray(forKey: Key.keepEnglish) {
-            settings.keepEnglish = uniqueTrimmed(words, lowercased: true)
         }
         if let rows = defaults.array(forKey: Key.appRules) as? [[String: Any]] {
             settings.appRules = AppRule.cleaned(rows.compactMap(AppRule.init(stored:)))
@@ -228,9 +167,7 @@ extension Settings {
         defaults.set(shareStats, forKey: Key.shareStats)
         defaults.set(onboardingSeen, forKey: Key.onboardingSeen)
         defaults.set(encoding.rawValue, forKey: Key.encoding)
-        defaults.set(macros.map { ["shortcut": $0.shortcut, "text": $0.text] }, forKey: Key.macros)
         defaults.set(shorthand, forKey: Key.shorthand)
-        defaults.set(keepEnglish, forKey: Key.keepEnglish)
         defaults.set(appRules.map(\.stored), forKey: Key.appRules)
         defaults.removeObject(forKey: Key.excludedApps)
     }
