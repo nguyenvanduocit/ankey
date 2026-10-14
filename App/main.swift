@@ -15,6 +15,8 @@ if CommandLine.arguments.dropFirst().contains("enable") {
 _ = AnkeyInputController.self
 
 ankeyServer = IMKServer(name: connectionName, bundleIdentifier: Bundle.main.bundleIdentifier)
+// The syllable index takes about 20 ms to build. Build it now so the first keystroke does not wait.
+_ = Engine.render("as")
 Updater.shared.startScheduledChecks()
 _ = NSApplicationMain(CommandLine.argc, CommandLine.unsafeArgv)
 

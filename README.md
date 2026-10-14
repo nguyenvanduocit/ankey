@@ -3,7 +3,7 @@
 A Telex Vietnamese input method for macOS. It does one thing: type Vietnamese with Telex, correctly and without getting in the way of English.
 
 - **Telex only.** `aa` gives `â`, `dd` gives `đ`, `s f r x j` set the tone.
-- **English stays English.** `smart`, `text` and `hello` come out as typed, because they are not Vietnamese syllables.
+- **English stays English.** `smart`, `text` and `hello` come out as typed, because they are not Vietnamese syllables. A word becomes Vietnamese only when it is a syllable that appears in real Vietnamese words, so `does` stays `does` instead of `doé`. Words like `test` and `list` have their own list, and short words like `as` follow the language of the word before them.
 - **Text expansion.** Type a shortcut, press space, get the full text.
 - **Per-app switch-off.** Pick the apps where Ankey should stay out of the way, such as Terminal.
 - **Signed, notarized, self-updating.** Updates come from GitHub Releases and are verified before they replace the installed app.
@@ -36,7 +36,7 @@ A tone or mark key can come after the whole syllable: `vieetj` gives `việt`, `
 
 Repeat a key to undo it and keep the literal letters: `aaa` gives `aa`, `noww` gives `now`, `ass` gives `ass`.
 
-**Backspace** removes one typed key. **Esc** cancels the word being typed. You can change Esc to commit the word instead in Settings.
+**Backspace** removes one typed key. **Esc** gives back the keys you typed when Ankey has added marks (`test` instead of `tét`). On a word without marks, Esc cancels the word, or commits it if you turn that off in Settings.
 
 ## Settings
 
@@ -45,7 +45,7 @@ Open them from the Ankey input-source menu → **Cài đặt…** (⌘,). Change
 | Tab | What it does |
 |---|---|
 | **Chung** | Tone placement: modern (`hoà`, `thuý`) or classic (`hòa`, `thúy`). Keep non-Vietnamese words as typed. Esc cancels or commits the word. |
-| **Gõ tắt** | Text expansion, plus the list of abbreviations that may take marks (`đc` by default). |
+| **Gõ tắt** | Text expansion, the list of abbreviations that may take marks (`đc` by default), and the list of English words kept as typed. |
 | **Ứng dụng** | Apps where Ankey does not compose. Keys go straight to the app. |
 | **Cập nhật** | Current version, update check, install. |
 
@@ -56,6 +56,12 @@ Add a shortcut (letters a–z only) and the text it expands to. Type the shortcu
 ### Abbreviations
 
 Words such as `đc` are not Vietnamese syllables, so Ankey would leave `ddc` as typed. Words in the abbreviation list still get their marks, so `ddc` gives `đc`. Add your own, such as `đt`.
+
+### English words
+
+Some English words are also valid Vietnamese syllables once Telex adds a tone: `test` would become `tét`, `list` would become `lít`. The **Từ tiếng Anh giữ nguyên** list keeps them as typed. It starts with `test`, `best`, `list`, `most`, `is`, `of`, `this`, `there` and similar words, and you can add or remove words.
+
+A second, built-in set covers words people also type as Vietnamese: `as`, `car`, `too`, `own`, `see` and a few more. They stay English right after an English word (`git commit as`) and convert after a Vietnamese word or at the start of a sentence (`cảm own` gives `cảm ơn`). Ankey forgets the language at a period, `!`, `?`, Return, Tab and when you switch away.
 
 ## Updates
 

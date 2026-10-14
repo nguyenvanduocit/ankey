@@ -64,6 +64,12 @@ struct Settings: Equatable {
     var escClears = true
     var macros: [Macro] = []
     var shorthand = ["\u{0111}c"]
+    /// English words that the rules would turn into Vietnamese (`test` → `tét`). Typed keys, lowercase.
+    var keepEnglish = [
+        "of", "if", "is", "or", "us", "has", "his", "this", "there", "here", "these", "now", "how",
+        "list", "lists", "most", "best", "test", "tests", "cost", "costs", "rest", "host", "hosts", "six",
+        "mix", "box",
+    ]
     var excludedApps: [String] = []
 }
 
@@ -75,6 +81,7 @@ extension Settings {
         static let escClears = "escClears"
         static let macros = "macros"
         static let shorthand = "shorthand"
+        static let keepEnglish = "keepEnglish"
         static let excludedApps = "excludedApps"
     }
 
@@ -103,6 +110,9 @@ extension Settings {
         if let words = defaults.stringArray(forKey: Key.shorthand) {
             settings.shorthand = uniqueTrimmed(words, lowercased: true)
         }
+        if let words = defaults.stringArray(forKey: Key.keepEnglish) {
+            settings.keepEnglish = uniqueTrimmed(words, lowercased: true)
+        }
         if let apps = defaults.stringArray(forKey: Key.excludedApps) {
             settings.excludedApps = uniqueTrimmed(apps, lowercased: false)
         }
@@ -116,6 +126,7 @@ extension Settings {
         defaults.set(escClears, forKey: Key.escClears)
         defaults.set(macros.map { ["shortcut": $0.shortcut, "text": $0.text] }, forKey: Key.macros)
         defaults.set(shorthand, forKey: Key.shorthand)
+        defaults.set(keepEnglish, forKey: Key.keepEnglish)
         defaults.set(excludedApps, forKey: Key.excludedApps)
     }
 

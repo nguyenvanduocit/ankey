@@ -51,7 +51,7 @@ let telex: [(String, String)] = [
     ("vieetj", "việt"),
     ("Vieetj", "Việt"),
     ("hoaf", "ho\u{00e0}"),
-    ("khoongf", "kh\u{1ed3}ng"),
+    ("khoongs", "kh\u{1ed1}ng"),
     ("khoer", "kho\u{1ebb}"),
     ("thuyr", "thu\u{1ef7}"),
     ("muas", "múa"),
@@ -408,25 +408,135 @@ func telexKeys(_ syllable: String) -> (inline: String, deferred: String) {
     return (inline + tone, plain + (horn ? "w" : "") + tone)
 }
 
-/// Optional argument: a file with one real Vietnamese syllable per line.
-func checkCorpus(_ path: String) {
-    guard let text = try? String(contentsOfFile: path, encoding: .utf8) else {
-        fputs("cannot read \(path)\n", stderr)
-        exit(2)
+/// Every attested syllable types out in both key orders, in either tone placement.
+func checkSyllables() {
+    func render(_ raw: String, _ style: ToneStyle) -> String {
+        var settings = Settings(toneStyle: style)
+        settings.keepEnglish = []
+        return Engine.render(raw, settings).precomposedStringWithCanonicalMapping
     }
-    var total = 0
-    for syllable in text.split(separator: "\n").map(String.init) {
-        total += 1
+    for syllable in Syllables.all {
         let keys = telexKeys(syllable)
         for (mode, raw) in [("inline", keys.inline), ("deferred", keys.deferred)] {
-            let got = Engine.render(raw)
-            if got != syllable {
+            let want = syllable.precomposedStringWithCanonicalMapping
+            if render(raw, .modern) != want && render(raw, .classic) != want {
                 failed += 1
-                fputs("FAIL corpus \(mode) \(raw) → \(got), want \(syllable)\n", stderr)
+                fputs("FAIL syllable \(mode) \(raw) → \(render(raw, .modern)), want \(syllable)\n", stderr)
             }
         }
     }
-    print("corpus \(total) syllables")
+    print("syllables \(Syllables.all.count)")
+}
+
+/// A repeated a, e or o undoes a circumflex only right after the marked vowels.
+func checkDistantRepeat() {
+    for word in ["reserved", "needed", "agreement", "weekend", "toronto", "difference", "defense"] {
+        check(word, word)
+    }
+}
+
+func checkKeepEnglish() {
+    check("test", Settings(), "test")
+    check("Test", Settings(), "Test")
+    check("TEST", Settings(), "TEST")
+    var empty = Settings()
+    empty.keepEnglish = []
+    check("test", empty, "t\u{00e9}t")
+    var custom = Settings()
+    custom.keepEnglish = ["tes"]
+    check("tes", custom, "tes")
+    check("test", custom, "t\u{00e9}t")
+    // Keeping English is part of restoring raw text.
+    check("test", Settings(restoreRaw: false), "t\u{00e9}t")
+    // Words people type as Vietnamese stay Vietnamese by default.
+    for raw in ["cams", "tets"] { check(raw, Settings(), Engine.render(raw, empty)) }
+
+    let suite = "ankey.tests.\(UUID().uuidString)"
+    let defaults = UserDefaults(suiteName: suite)!
+    defer { defaults.removePersistentDomain(forName: suite) }
+    expect(Settings.load(from: defaults).keepEnglish.contains("test"), true, "keepEnglish default")
+    var settings = Settings()
+    settings.keepEnglish = [" TEST ", "", "test", "best"]
+    settings.save(to: defaults)
+    expect(Settings.load(from: defaults).keepEnglish, ["test", "best"], "keepEnglish cleanup")
+    defaults.set(5, forKey: "keepEnglish")
+    expect(Settings.load(from: defaults).keepEnglish, Settings().keepEnglish, "keepEnglish wrong type")
+    settings.keepEnglish = []
+    settings.save(to: defaults)
+    expect(Settings.load(from: defaults).keepEnglish, [], "empty keepEnglish is kept")
+}
+
+func checkContext() {
+    let s = Settings()
+    expect(Engine.render("as", s, after: nil), "\u{00e1}", "as without context")
+    expect(Engine.render("as", s, after: .vietnamese), "\u{00e1}", "as after Vietnamese")
+    expect(Engine.render("as", s, after: .english), "as", "as after English")
+    // Only the ambiguous words react to the context.
+    expect(Engine.render("cas", s, after: .english), "c\u{00e1}", "cas after English")
+    expect(Engine.render("own", s, after: .english), "own", "own after English")
+    expect(Engine.render("own", s, after: .vietnamese), "\u{01a1}n", "own after Vietnamese")
+    expect(Engine.render("as", Settings(restoreRaw: false), after: .english), "\u{00e1}", "restoreRaw off")
+
+    func typed(_ session: inout Session, _ word: String) -> String {
+        for ch in word { _ = session.push(ch) }
+        return session.finish(s, expand: false)
+    }
+    var session = Session()
+    expect(typed(&session, "commit"), "commit", "english word")
+    expect(typed(&session, "as"), "as", "as after commit")
+    expect(typed(&session, "cams"), "c\u{00e1}m", "Vietnamese word")
+    expect(typed(&session, "as"), "\u{00e1}", "as after Vietnamese word")
+    // A neutral word keeps the language before it.
+    _ = typed(&session, "commit")
+    expect(typed(&session, "ba"), "ba", "neutral word")
+    expect(typed(&session, "as"), "as", "as after neutral word")
+    // A sentence end starts fresh.
+    _ = typed(&session, "commit")
+    expect(session.push("."), .pass, "dot with nothing composing")
+    expect(typed(&session, "as"), "\u{00e1}", "as after a sentence end")
+    for ch in "commit" { _ = session.push(ch) }
+    expect(session.push("."), .commit, "dot commits")
+    _ = session.finish(s, expand: false)
+    expect(typed(&session, "as"), "\u{00e1}", "as after word and dot")
+    // Context is forgotten on request.
+    _ = typed(&session, "commit")
+    session.forgetContext()
+    expect(typed(&session, "as"), "\u{00e1}", "as after forgetContext")
+    // A macro says nothing about the language.
+    var macro = s
+    macro.macros = [Macro(shortcut: "vn", text: "vi\u{1ec7}t nam")]
+    _ = typed(&session, "commit")
+    for ch in "vn" { _ = session.push(ch) }
+    expect(session.finish(macro, expand: true), "vi\u{1ec7}t nam", "macro expands")
+    expect(typed(&session, "as"), "as", "macro keeps the earlier language")
+}
+
+func checkRawRestore() {
+    var none = Settings()
+    none.keepEnglish = []
+    var session = Session()
+    for ch in "test" { _ = session.push(ch) }
+    expect(session.display(none), "t\u{00e9}t", "converted before Esc")
+    expect(session.finishRaw(), "test", "Esc gives the typed keys")
+    expect(session.isComposing, false, "nothing composing after Esc")
+    // The word was English, so the next ambiguous word stays English.
+    for ch in "as" { _ = session.push(ch) }
+    expect(session.display(none), "as", "as after Esc")
+    _ = session.finish(none, expand: false)
+    var noww = Session()
+    for ch in "noww" { _ = noww.push(ch) }
+    expect(noww.display(none), "now", "undone mark")
+    expect(noww.finishRaw(), "noww", "Esc restores every key")
+}
+
+func checkAttested() {
+    // The rules allow doé, but no real word has it.
+    check("does", "does")
+    // A conversion stays visible while the word can still grow into a real syllable.
+    check("thuow", "thu\u{01a1}")
+    check("vieet", "vi\u{00ea}t")
+    check("vieetj", "vi\u{1ec7}t")
+    check("nguoiwf", "ng\u{01b0}\u{1edd}i")
 }
 
 @main
@@ -441,7 +551,12 @@ struct TestRunner {
         checkLoadTiming()
         checkExpansion()
         checkShorthand()
-        if CommandLine.arguments.count > 1 { checkCorpus(CommandLine.arguments[1]) }
+        checkAttested()
+        checkKeepEnglish()
+        checkContext()
+        checkRawRestore()
+        checkDistantRepeat()
+        checkSyllables()
 
         var session = Session()
         precondition(session.push("a") == .consumed)

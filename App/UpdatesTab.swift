@@ -25,7 +25,7 @@ struct UpdatesTab: View {
             } header: {
                 Text("Cập nhật")
             } footer: {
-                Text("Ankey tự kiểm tra mỗi ngày một lần và chỉ cài khi bạn bấm Cập nhật.")
+                SectionFooter("Ankey tự kiểm tra mỗi ngày một lần và chỉ cài khi bạn bấm Cập nhật.")
             }
         }
         .formStyle(.grouped)

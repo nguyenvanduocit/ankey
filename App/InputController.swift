@@ -38,6 +38,10 @@ final class AnkeyInputController: IMKInputController {
         }
         if name == "cancelOperation:" {
             guard session.isComposing else { return false }
+            if session.display(settings) != session.raw {
+                insert(session.finishRaw(), sender)
+                return true
+            }
             guard settings.escClears else {
                 commit(sender, settings, expand: false)
                 return false
@@ -46,8 +50,9 @@ final class AnkeyInputController: IMKInputController {
             refresh(sender, settings)
             return true
         }
-        guard session.isComposing else { return false }
-        commit(sender, settings, expand: name == "insertNewline:" || name == "insertTab:")
+        let endsLine = name == "insertNewline:" || name == "insertTab:"
+        if session.isComposing { commit(sender, settings, expand: endsLine) }
+        if endsLine { session.forgetContext() }
         return false
     }
 
@@ -61,6 +66,7 @@ final class AnkeyInputController: IMKInputController {
 
     override func deactivateServer(_ sender: Any!) {
         commit(sender, Settings.load(), expand: false)
+        session.forgetContext()
     }
 
     override func menu() -> NSMenu! {
@@ -141,8 +147,10 @@ final class AnkeyInputController: IMKInputController {
     }
 
     private func commit(_ sender: Any!, _ settings: Settings, expand: Bool) {
-        let text = session.committed(settings, expand: expand)
-        session.clear()
+        insert(session.finish(settings, expand: expand), sender)
+    }
+
+    private func insert(_ text: String, _ sender: Any!) {
         guard !text.isEmpty, let client = textClient(sender) else { return }
         client.insertText(text, replacementRange: anywhere)
     }

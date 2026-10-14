@@ -11,11 +11,14 @@ enum Push {
 
 struct Session {
     private(set) var raw = ""
+    /// The language of the last finished word that showed one. Ambiguous words follow it.
+    private var previous: Language?
+    private var endsSentence = false
 
     var isComposing: Bool { !raw.isEmpty }
 
     func display(_ settings: Settings) -> String {
-        Engine.render(raw, settings)
+        Engine.render(raw, settings, after: previous)
     }
 
     /// The text a finished word becomes. `expand` is true only for word-ending keys.
@@ -24,12 +27,45 @@ struct Session {
         return display(settings)
     }
 
+    /// Commits the word and remembers its language for the next one.
+    mutating func finish(_ settings: Settings, expand: Bool) -> String {
+        let text = committed(settings, expand: expand)
+        let expanded = expand && Engine.expansion(for: raw, settings) != nil
+        let language = expanded ? nil : Engine.analyze(raw, settings, after: previous).language
+        if endsSentence {
+            previous = nil
+        } else if let language {
+            previous = language
+        }
+        endsSentence = false
+        raw = ""
+        return text
+    }
+
+    /// The typed keys as they are. The word counts as English from here on.
+    mutating func finishRaw() -> String {
+        let text = raw
+        raw = ""
+        previous = .english
+        endsSentence = false
+        return text
+    }
+
+    mutating func forgetContext() {
+        previous = nil
+    }
+
     mutating func push(_ ch: Character) -> Push {
         if Engine.isComposing(ch) {
             raw.append(ch)
             return .consumed
         }
-        if raw.isEmpty { return .pass }
+        let sentenceEnd = ".!?".contains(ch)
+        if raw.isEmpty {
+            if sentenceEnd { previous = nil }
+            return .pass
+        }
+        endsSentence = sentenceEnd
         return .commit
     }
 
@@ -44,12 +80,25 @@ struct Session {
     }
 }
 
+enum Language {
+    case vietnamese
+    case english
+}
+
 enum Engine {
     static func isComposing(_ ch: Character) -> Bool {
         ch.isASCII && ch.isLetter
     }
 
-    static func render(_ raw: String, _ settings: Settings = Settings()) -> String {
+    static func render(_ raw: String, _ settings: Settings = Settings(), after previous: Language? = nil) -> String {
+        analyze(raw, settings, after: previous).text
+    }
+
+    /// The text a word shows and the language it reveals. `language` is nil when the
+    /// word reads the same in both. `previous` is the language of the word before it.
+    static func analyze(
+        _ raw: String, _ settings: Settings, after previous: Language?
+    ) -> (text: String, language: Language?) {
         var atoms: [Atom] = []
         var tone = Tone.none
         var toneFrom: Character?
@@ -64,11 +113,25 @@ enum Engine {
         }
         atoms = normalizeHorn(atoms)
         let out = compose(atoms, tone: tone, style: settings.toneStyle)
-        guard settings.restoreRaw else { return out }
+        let language: Language? = out == literal ? nil : .vietnamese
+        guard settings.restoreRaw else { return (out, language) }
+        let word = raw.lowercased()
+        if settings.keepEnglish.contains(word) || (previous == .english && ambiguous.contains(word)) {
+            return (literal, .english)
+        }
         let abbreviation = settings.abbreviation && settings.shorthand.contains(out.lowercased())
-        guard isSyllable(atoms, tone: tone) || abbreviation else { return literal }
-        return out
+        guard isRealSyllable(atoms, tone: tone, style: settings.toneStyle) || abbreviation else {
+            return (literal, .english)
+        }
+        return (out, language)
     }
+
+    /// English words that are also Vietnamese words people type. They stay English
+    /// right after an English word and convert everywhere else.
+    private static let ambiguous: Set<String> = [
+        "as", "car", "cars", "per", "last", "docs", "max", "var", "ref", "bar", "bus", "gas",
+        "sex", "tax", "too", "low", "see", "own", "down", "been",
+    ]
 
     /// Looks the typed keys up in the macro table and copies the typed case onto the text.
     /// The table comes from `Settings.load()`, so its shortcuts are already lowercase.
@@ -93,7 +156,7 @@ private enum Hat {
     case horn
 }
 
-private enum Tone: Int {
+enum Tone: Int {
     case none = 0
     case sac, huyen, hoi, nga, nang
 }
@@ -210,6 +273,7 @@ private func telexIntent(_ key: Character) -> Intent? {
 
 /// A horn or breve finds its vowel in the last vowel cluster, wherever the key is typed after it.
 /// With no open vowel left, repeating the key undoes the mark and keeps the key as a literal letter.
+/// A circumflex key marks and undoes only the vowels right before it.
 private func applyMark(_ atoms: inout [Atom], key: Character, upper: Bool, _ intent: Intent) -> MarkResult {
     if case .stroke = intent { return applyStroke(&atoms, key: key, upper: upper) }
     let cluster = vowelRange(atoms)
@@ -221,6 +285,8 @@ private func applyMark(_ atoms: inout [Atom], key: Character, upper: Bool, _ int
     }
     let marked = cluster.filter { atoms[$0].markKey == key }
     guard !marked.isEmpty else { return .none }
+    // The repeat that applies a circumflex also undoes it, and only right after the vowels.
+    if case .circumflex = intent, cluster.upperBound != atoms.count { return .none }
     for i in marked {
         atoms[i].hat = .none
         atoms[i].markKey = nil
@@ -411,6 +477,12 @@ private let nuclei: Set<String> = [
 
 /// Vowels still waiting for their circumflex. They are valid only while no tone is set.
 private let unfinishedNuclei: Set<String> = ["ie", "ye", "uo", "uoi", "uou", "uye", "ieu", "yeu"]
+
+/// The rules allow it and real Vietnamese words contain it, or could still grow into one.
+private func isRealSyllable(_ atoms: [Atom], tone: Tone, style: ToneStyle) -> Bool {
+    isSyllable(atoms, tone: tone)
+        && Syllables.accepts(compose(atoms, tone: .none, style: style).lowercased(), tone: tone)
+}
 
 /// Initial + vowels + final, where a final c, ch, p or t takes only the sắc or nặng tone.
 private func isSyllable(_ atoms: [Atom], tone: Tone) -> Bool {

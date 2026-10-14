@@ -21,6 +21,19 @@ struct OptionToggle: View {
     }
 }
 
+/// Footer text of a grouped-Form section, left-aligned across the full section width.
+struct SectionFooter: View {
+    let text: String
+
+    init(_ text: String) { self.text = text }
+
+    var body: some View {
+        Text(text)
+            .multilineTextAlignment(.leading)
+            .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
 struct GeneralTab: View {
     @ObservedObject var model: SettingsModel
 
@@ -34,7 +47,7 @@ struct GeneralTab: View {
             } header: {
                 Text("Gõ tiếng Việt")
             } footer: {
-                Text("Hai kiểu chỉ khác nhau ở oa, oe, uy khi không có phụ âm cuối.")
+                SectionFooter("Hai kiểu chỉ khác nhau ở oa, oe, uy khi không có phụ âm cuối.")
             }
 
             Section("Hành vi") {
@@ -45,7 +58,7 @@ struct GeneralTab: View {
                 )
                 OptionToggle(
                     title: "Esc huỷ từ đang gõ",
-                    detail: "Tắt: Esc chốt từ đang gõ rồi gửi Esc cho ứng dụng.",
+                    detail: "Từ đã ghép dấu: Esc trả lại chữ đã gõ. Từ khác: bật thì xoá từ, tắt thì chốt từ rồi gửi Esc cho ứng dụng.",
                     isOn: $model.value.escClears
                 )
             }
@@ -96,6 +109,7 @@ struct MacroRow: View {
 struct MacrosTab: View {
     @ObservedObject var model: SettingsModel
     @State private var newWord = ""
+    @State private var newEnglish = ""
 
     var body: some View {
         let problems = Macro.problems(in: model.value.macros)
@@ -112,7 +126,7 @@ struct MacrosTab: View {
             } header: {
                 Text("Mở rộng văn bản")
             } footer: {
-                Text("Gõ phím tắt rồi bấm cách để thay bằng nội dung. Chữ hoa của phím tắt được áp vào kết quả.")
+                SectionFooter("Gõ phím tắt rồi bấm cách để thay bằng nội dung. Chữ hoa của phím tắt được áp vào kết quả.")
             }
 
             Section {
@@ -145,8 +159,47 @@ struct MacrosTab: View {
                 Text("Từ viết tắt")
             }
             .disabled(!model.value.restoreRaw)
+
+            Section {
+                ForEach(model.value.keepEnglish, id: \.self) { word in
+                    HStack {
+                        Text(word)
+                        Spacer()
+                        Button {
+                            model.value.keepEnglish.removeAll { $0 == word }
+                        } label: {
+                            Image(systemName: "minus.circle")
+                        }
+                        .buttonStyle(.borderless)
+                        .help("Xoá")
+                    }
+                }
+                HStack {
+                    TextField("Từ mới", text: $newEnglish, prompt: Text("Từ mới, ví dụ test"))
+                        .labelsHidden()
+                        .onSubmit(addEnglish)
+                    Button("Thêm", action: addEnglish)
+                        .disabled(normalizedNewEnglish.isEmpty)
+                }
+            } header: {
+                Text("Từ tiếng Anh giữ nguyên")
+            } footer: {
+                SectionFooter("Những từ này luôn ra đúng chữ đã gõ, ví dụ test không thành tét. Cần bật mục giữ nguyên chữ ở tab Chung.")
+            }
+            .disabled(!model.value.restoreRaw)
         }
         .formStyle(.grouped)
+    }
+
+    private var normalizedNewEnglish: String {
+        newEnglish.trimmingCharacters(in: .whitespaces).lowercased()
+    }
+
+    private func addEnglish() {
+        let word = normalizedNewEnglish
+        guard !word.isEmpty, !model.value.keepEnglish.contains(word) else { return }
+        model.value.keepEnglish.append(word)
+        newEnglish = ""
     }
 
     private var normalizedNewWord: String {
@@ -176,7 +229,7 @@ struct AppsTab: View {
             } header: {
                 Text("Ứng dụng tắt Ankey")
             } footer: {
-                Text("Trong các ứng dụng này Ankey không ghép dấu, phím gõ đi thẳng vào ứng dụng.")
+                SectionFooter("Trong các ứng dụng này Ankey không ghép dấu, phím gõ đi thẳng vào ứng dụng.")
             }
         }
         .formStyle(.grouped)
