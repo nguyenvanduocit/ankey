@@ -11,12 +11,13 @@ final class AnkeyInputController: IMKInputController {
     private struct Context {
         let settings: Settings
         let rule: AppRule
+        let encoding: OutputEncoding
     }
 
     private func context(_ sender: Any!) -> Context {
         let stored = Settings.load()
         let rule = stored.rule(for: textClient(sender)?.bundleIdentifier())
-        return Context(settings: stored, rule: rule)
+        return Context(settings: stored, rule: rule, encoding: stored.encoding(for: rule))
     }
 
     // Overriding handle makes it the only entry point: IMK stops calling inputText and
@@ -181,7 +182,8 @@ final class AnkeyInputController: IMKInputController {
     }
 
     /// Puts the finished word in the document and leaves nothing pending.
-    private func finalize(_ text: String, _ sender: Any!, _ ctx: Context) {
+    private func finalize(_ word: String, _ sender: Any!, _ ctx: Context) {
+        let text = ctx.encoding.convert(word)
         if ctx.rule.insertion == .direct {
             replaceShown(with: text, sender)
             shown = ""
@@ -191,10 +193,12 @@ final class AnkeyInputController: IMKInputController {
         client.insertText(text, replacementRange: anywhere)
     }
 
+    /// The underlined word stays readable Unicode and converts when it is committed.
+    /// Direct text goes into the document at once, so it converts here.
     private func refresh(_ sender: Any!, _ ctx: Context) {
         let text = session.display(ctx.settings)
         if ctx.rule.insertion == .direct {
-            replaceShown(with: text, sender)
+            replaceShown(with: ctx.encoding.convert(text), sender)
             return
         }
         guard let client = textClient(sender) else { return }

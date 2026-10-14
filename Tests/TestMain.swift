@@ -660,6 +660,75 @@ func checkAttested() {
     check("vieetj", "vi\u{1ec7}t")
     check("nguoiwf", "ng\u{01b0}\u{1edd}i")
 }
+func checkEncoding() {
+    func conv(_ text: String, _ encoding: OutputEncoding) -> String { encoding.convert(text) }
+    func scalars(_ text: String) -> [UInt32] { text.unicodeScalars.map(\.value) }
+
+    // Unicode is the identity.
+    expect(conv("Vi\u{1ec7}t Nam", .unicode), "Vi\u{1ec7}t Nam", "unicode is unchanged")
+
+    // TCVN3: one byte per letter, shown as the Latin-1 scalar of that byte.
+    expect(scalars(conv("vi\u{1ec7}t nam", .tcvn3)), [0x76, 0x69, 0xD6, 0x74, 0x20, 0x6E, 0x61, 0x6D], "tcvn3 việt nam")
+    expect(scalars(conv("\u{0111}\u{01b0}\u{1edd}ng", .tcvn3)), [0xAE, 0xAD, 0xEA, 0x6E, 0x67], "tcvn3 đường")
+    expect(scalars(conv("\u{0110}\u{01af}\u{1edc}NG", .tcvn3)), [0xA7, 0xA6, 0xEA, 0x4E, 0x47], "tcvn3 ĐƯỜNG: accented capitals share the lowercase byte")
+    expect(conv("\u{00c1}", .tcvn3), conv("\u{00e1}", .tcvn3), "tcvn3 Á shares the byte of á")
+
+    // VNI Windows: base letter then a mark byte; ơ ư đ and a few vowels are single bytes.
+    expect(scalars(conv("Vi\u{1ec7}t Nam", .vniWindows)), [0x56, 0x69, 0x65, 0xE4, 0x74, 0x20, 0x4E, 0x61, 0x6D], "vni Việt Nam")
+    expect(scalars(conv("\u{0111}\u{01b0}\u{1edd}ng", .vniWindows)), [0xF1, 0xF6, 0xF4, 0xF8, 0x6E, 0x67], "vni đường")
+    expect(scalars(conv("\u{1ea4}", .vniWindows)), [0x41, 0xC1], "vni Ấ")
+    expect(scalars(conv("\u{00f4}", .vniWindows)), [0x6F, 0xE2], "vni ô is o + circumflex byte")
+    expect(scalars(conv("\u{1ed1}", .vniWindows)), [0x6F, 0xE1], "vni ố")
+
+    // Text that is not Vietnamese passes through, and a decomposed letter converts like the precomposed one.
+    expect(conv("hello, 123 !", .tcvn3), "hello, 123 !", "tcvn3 leaves ASCII alone")
+    expect(conv("hello, 123 !", .vniWindows), "hello, 123 !", "vni leaves ASCII alone")
+    expect(conv("a\u{0301}", .tcvn3), conv("\u{00e1}", .tcvn3), "tcvn3 decomposed á")
+    expect(conv("a\u{0301}", .vniWindows), conv("\u{00e1}", .vniWindows), "vni decomposed á")
+    expect(conv("", .tcvn3), "", "empty text")
+
+    // Every Vietnamese letter converts, to Latin-1 scalars, and no two lowercase letters collide.
+    let lower = "àáảãạăằắẳẵặâầấẩẫậđèéẻẽẹêềếểễệìíỉĩịòóỏõọôồốổỗộơờớởỡợùúủũụưừứửữựỳýỷỹỵ"
+    let upper = lower.uppercased()
+    expect(lower.count, 67, "lowercase letter count")
+    expect(upper.count, 67, "uppercase letter count")
+    for encoding in [OutputEncoding.tcvn3, .vniWindows] {
+        var seen = Set<[UInt32]>()
+        for letter in lower {
+            let out = scalars(conv(String(letter), encoding))
+            expect(out.isEmpty || out.contains { $0 < 0x41 || $0 > 0xFE }, false, "\(encoding) \(letter) stays in 0x41...0xFE")
+            expect(seen.insert(out).inserted, true, "\(encoding) \(letter) is unique")
+        }
+    }
+    // A few letters already sit on their own Latin-1 byte, so they come out unchanged.
+    expect(conv("\u{00fd}", .tcvn3), "\u{00fd}", "tcvn3 ý is its own byte")
+    expect(conv("\u{00ec}\u{00ed}\u{00cc}\u{00cd}", .vniWindows), "\u{00ec}\u{00ed}\u{00cc}\u{00cd}", "vni ì í Ì Í are their own bytes")
+
+    // Settings: default, round trip, a bad value, and the per-app override.
+    let suite = "ankey.tests.\(UUID().uuidString)"
+    let defaults = UserDefaults(suiteName: suite)!
+    defer { defaults.removePersistentDomain(forName: suite) }
+    expect(Settings.load(from: defaults).encoding, .unicode, "encoding default")
+    var settings = Settings()
+    settings.encoding = .tcvn3
+    settings.appRules = [
+        AppRule(bundleID: "com.microsoft.Word", encoding: .vniWindows),
+        AppRule(bundleID: "com.apple.TextEdit"),
+    ]
+    settings.save(to: defaults)
+    expect(Settings.load(from: defaults), settings, "encoding round trip")
+    expect(Settings.load(from: defaults).appRules.map(\.encoding), [.vniWindows, nil], "rule encoding round trip")
+    defaults.set("klingon", forKey: "encoding")
+    expect(Settings.load(from: defaults).encoding, .unicode, "bad global encoding falls back")
+    expect(AppRule(stored: ["bundleID": "x", "encoding": "klingon"])?.encoding, nil, "bad rule encoding follows the default")
+    expect(AppRule(stored: ["bundleID": "x"])?.encoding, nil, "old rule without encoding follows the default")
+
+    expect(settings.encoding(for: settings.rule(for: "com.microsoft.Word")), .vniWindows, "app override wins")
+    expect(settings.encoding(for: settings.rule(for: "com.apple.TextEdit")), .tcvn3, "rule without override follows the default")
+    expect(settings.encoding(for: settings.rule(for: "com.unknown.App")), .tcvn3, "unknown app follows the default")
+    expect(settings.encoding(for: settings.rule(for: nil)), .tcvn3, "no bundle id follows the default")
+}
+
 
 @main
 struct TestRunner {
@@ -669,6 +738,7 @@ struct TestRunner {
         checkMacroStorage()
         checkMacroProblems()
         checkAppRules()
+        checkEncoding()
         checkRelease()
         checkLoadTiming()
         checkExpansion()
