@@ -19,6 +19,32 @@ extension Trigger {
     }
 }
 
+/// One row for each cheat code, read from `Trigger.all`.
+struct TriggerRows: View {
+    var body: some View {
+        ForEach(Trigger.all, id: \.code) { trigger in
+            HStack(alignment: .firstTextBaseline, spacing: 3 * Pixel.unit) {
+                Text(trigger.code).foregroundStyle(Pixel.accent)
+                Text(trigger.guideText).foregroundStyle(Pixel.muted)
+            }
+        }
+    }
+}
+
+/// The first run walks through setup. Help is for someone who already types with Ankey, so it has no
+/// setup check and no practice field.
+enum GuideMode {
+    case firstRun
+    case help
+
+    var title: String {
+        switch self {
+        case .firstRun: return "Hướng dẫn Ankey"
+        case .help: return "Trợ giúp Ankey"
+        }
+    }
+}
+
 struct OnboardingView: View {
     let onFinish: () -> Void
 
@@ -133,16 +159,80 @@ struct OnboardingView: View {
                 title: "Mã gõ nhanh",
                 footer: "Gõ mã ở đầu từ rồi làm theo hướng dẫn hiện ra."
             ) {
-                ForEach(Trigger.all, id: \.code) { trigger in
-                    HStack(alignment: .firstTextBaseline, spacing: 3 * Pixel.unit) {
-                        Text(trigger.code).foregroundStyle(Pixel.accent)
-                        Text(trigger.guideText).foregroundStyle(Pixel.muted)
-                    }
-                }
+                TriggerRows()
             }
             Button("Mở Cài đặt") { SettingsWindowController.shared.show() }
                 .buttonStyle(PixelButtonStyle())
         }
+    }
+}
+
+/// Questions people ask, each answered from the README or from what the app does. A question with no
+/// source there does not belong here.
+struct HelpView: View {
+    let onFinish: () -> Void
+
+    private static let questions: [(question: String, answer: String)] = [
+        // README "Phân biệt tiếng Anh và tiếng Việt"; Settings → Gõ tắt → Từ tiếng Anh giữ nguyên.
+        ("Sao chữ tiếng Anh không bị đổi dấu?",
+         "Ankey chỉ đổi khi kết quả là một âm tiết tiếng Việt có thật, và đã có sẵn hơn 200 từ tiếng Anh hay gặp như reset, test. Từ của bạn thêm ở thẻ Gõ tắt → Từ tiếng Anh giữ nguyên."),
+        // InputController cancelOperation; Settings → Chung → Esc huỷ từ đang gõ.
+        ("Ankey đổi nhầm, lấy lại chữ đã gõ thế nào?",
+         "Bấm Esc ngay: chữ trở về đúng phím đã gõ, tét thành test. Từ chưa ghép dấu thì Esc xoá hoặc chốt từ, chọn ở thẻ Chung → Esc huỷ từ đang gõ."),
+        // Settings → Ứng dụng: footer and the help on the mode choice.
+        ("Tắt, Gạch chân, Trực tiếp khác nhau thế nào?",
+         "Chọn ở thẻ Ứng dụng → Thêm ứng dụng…. Tắt: Ankey không gõ ở đó. Gạch chân (mặc định): chữ gạch chân tới khi chốt. Trực tiếp: Cmd+A thấy đủ chữ, một số ứng dụng không hỗ trợ."),
+        // Settings → Gõ tắt: footer and the shortcut check.
+        ("Thêm gõ tắt thế nào?",
+         "Thẻ Gõ tắt → Thêm phím tắt, nhập phím tắt (chỉ chữ a–z) và nội dung. Gõ phím tắt rồi bấm cách để thay bằng nội dung."),
+        // README "Mã gõ nhanh"; FeedbackFlow key handling; FeedbackHUD note.
+        ("///feedback gửi gì, ai nhận?",
+         "Chỉ gửi khi bạn bấm Enter, Esc để bỏ. Gửi đoạn bạn gõ cùng macOS, chip, bảng mã, chế độ gõ, không có tên ứng dụng. Datadog còn nhận IP và user agent của bạn."),
+        // Settings → Cập nhật footer; the update item in the input menu.
+        ("Cập nhật thế nào?",
+         "Ankey tự kiểm tra khi mở và mỗi ngày một lần. Có bản mới thì menu bộ gõ hiện Cập nhật lên…, Ankey chỉ cài khi bạn bấm. Muốn kiểm tra ngay thì dùng thẻ Cập nhật."),
+    ]
+
+    /// The repo the updater reads releases from. No repo in Info.plist means no link.
+    private var issuesURL: URL? {
+        guard let repo = Bundle.main.object(forInfoDictionaryKey: "AnkeyReleaseRepo") as? String, !repo.isEmpty else { return nil }
+        return URL(string: "https://github.com/\(repo)/issues")
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            PixelPage {
+                PixelSection(title: "Mã gõ nhanh", footer: "Gõ mã ở đầu từ rồi làm theo hướng dẫn hiện ra.") {
+                    TriggerRows()
+                }
+                PixelSection(title: "Hỏi đáp") {
+                    ForEach(Self.questions, id: \.question) { item in
+                        VStack(alignment: .leading, spacing: Pixel.unit) {
+                            Text(item.question).foregroundStyle(Pixel.accent)
+                            Text(item.answer).foregroundStyle(Pixel.muted)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+                if let issuesURL {
+                    Button("Báo lỗi trên GitHub") { NSWorkspace.shared.open(issuesURL) }
+                        .buttonStyle(PixelButtonStyle())
+                }
+            }
+            HStack(spacing: 2 * Pixel.unit) {
+                Button("Mở Cài đặt") { SettingsWindowController.shared.show() }
+                    .buttonStyle(PixelButtonStyle())
+                Spacer()
+                Button("Đóng", action: onFinish)
+                    .buttonStyle(PixelButtonStyle(primary: true))
+            }
+            .padding(.horizontal, 8 * Pixel.unit)
+            .padding(.vertical, 5 * Pixel.unit)
+        }
+        .font(Pixel.font())
+        .foregroundStyle(Pixel.text)
+        .frame(width: 520, height: 440)
+        .background(Pixel.bg)
     }
 }
 
@@ -151,7 +241,6 @@ final class OnboardingWindowController: NSWindowController {
 
     init() {
         let window = NSWindow()
-        window.title = "Hướng dẫn Ankey"
         window.styleMask = [.titled, .closable, .fullSizeContentView]
         window.titlebarAppearsTransparent = true
         window.appearance = NSAppearance(named: .darkAqua)
@@ -165,9 +254,14 @@ final class OnboardingWindowController: NSWindowController {
         fatalError("init(coder:) is not supported")
     }
 
-    /// Starts again at step 1 every time.
-    func show() {
-        window?.contentViewController = NSHostingController(rootView: OnboardingView { [weak self] in self?.close() })
+    /// Starts from the top every time.
+    func show(_ mode: GuideMode) {
+        let close: () -> Void = { [weak self] in self?.close() }
+        switch mode {
+        case .firstRun: window?.contentViewController = NSHostingController(rootView: OnboardingView(onFinish: close))
+        case .help: window?.contentViewController = NSHostingController(rootView: HelpView(onFinish: close))
+        }
+        window?.title = mode.title
         NSApp.activate(ignoringOtherApps: true)
         window?.center()
         showWindow(nil)

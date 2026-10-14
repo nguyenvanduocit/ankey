@@ -157,9 +157,9 @@ final class AnkeyInputController: IMKInputController {
         let settings = NSMenuItem(title: "Cài đặt…", action: #selector(showSettings(_:)), keyEquivalent: ",")
         settings.target = self
         menu.addItem(settings)
-        let guide = NSMenuItem(title: "Hướng dẫn…", action: #selector(showGuide(_:)), keyEquivalent: "")
-        guide.target = self
-        menu.addItem(guide)
+        let help = NSMenuItem(title: "Trợ giúp…", action: #selector(showHelp(_:)), keyEquivalent: "")
+        help.target = self
+        menu.addItem(help)
         // IMK builds the menu on the main thread.
         switch MainActor.assumeIsolated({ Updater.shared.state }) {
         case .available(let release):
@@ -189,8 +189,8 @@ final class AnkeyInputController: IMKInputController {
         }
     }
 
-    @objc private func showGuide(_ sender: Any?) {
-        MainActor.assumeIsolated { OnboardingWindowController.shared.show() }
+    @objc private func showHelp(_ sender: Any?) {
+        MainActor.assumeIsolated { OnboardingWindowController.shared.show(.help) }
     }
 
     /// The menu item and the `///ankey` code both open Settings here. IMK and AppKit call on the main thread.

@@ -24,7 +24,7 @@ let hadStoredValues = !(UserDefaults.standard.persistentDomain(forName: Bundle.m
 let opensGuide = Onboarding.opensAtLaunch(seen: Settings.load().onboardingSeen, hadStoredValues: hadStoredValues)
 Settings.markOnboardingSeen()
 if opensGuide {
-    Task { @MainActor in OnboardingWindowController.shared.show() }
+    Task { @MainActor in OnboardingWindowController.shared.show(.firstRun) }
 }
 Updater.shared.startScheduledChecks()
 StatsSchedule.start()
