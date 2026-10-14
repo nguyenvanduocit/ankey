@@ -13,6 +13,7 @@ final class FeedbackFlow {
     init(sender: DatadogLogSender, hud: FeedbackHUD = .shared) {
         self.sender = sender
         self.hud = hud
+        hud.onClose = { [weak self] in self?.dismiss() }
     }
 
     /// While a report is open it takes every key.
@@ -45,6 +46,13 @@ final class FeedbackFlow {
             }
         }
         render(settings)
+    }
+
+    /// The X button: the report and the HUD both go, whatever the HUD shows. A send already under way
+    /// still ends in a notice.
+    func dismiss() {
+        capture = nil
+        hud.hide()
     }
 
     /// Throws the report away. A send already under way still ends in a notice.

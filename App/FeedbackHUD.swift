@@ -24,6 +24,8 @@ enum HUDState: Equatable {
 @MainActor
 final class HUDModel: ObservableObject {
     @Published var state = HUDState.sent
+    /// What the X button does. Whoever owns the report sets it.
+    var onClose: (@MainActor () -> Void)?
 }
 
 private extension ReportKind {
@@ -60,6 +62,12 @@ struct FeedbackHUDView: View {
         .padding(.vertical, 5 * Pixel.unit)
         .frame(width: 270 * Pixel.unit, alignment: .leading)
         .pixelBox(fill: Pixel.bg)
+        .overlay(alignment: .topTrailing) {
+            Button { model.onClose?() } label: { Text("×").foregroundStyle(Pixel.muted) }
+                .buttonStyle(PixelButtonStyle(minWidth: 0))
+                .padding(2 * Pixel.unit)
+                .help("Đóng")
+        }
         .font(Pixel.font())
         .foregroundStyle(Pixel.text)
         .environment(\.colorScheme, .dark)
@@ -73,6 +81,7 @@ struct FeedbackHUDView: View {
             Spacer(minLength: 0)
             Text(verbatim: "\(text.count)/\(Capture.limit)").foregroundStyle(Pixel.muted)
         }
+        .padding(.trailing, 8 * Pixel.unit)
         TimelineView(.periodic(from: .now, by: Self.blinkInterval)) { context in
             Self.entry(text, caretOn: phase != .sending && Self.caretVisible(at: context.date))
         }
@@ -90,7 +99,7 @@ struct FeedbackHUDView: View {
 
         switch phase {
         case .typing:
-            Text("Enter gửi · Esc huỷ").foregroundStyle(Pixel.muted)
+            EmptyView()
         case .sending:
             HStack(spacing: 2 * Pixel.unit) {
                 PixelSpinner()
@@ -98,7 +107,6 @@ struct FeedbackHUDView: View {
             }
         case .failed(let reason):
             Text("Chưa gửi được: \(reason)").foregroundStyle(Pixel.danger)
-            Text("Enter thử lại · Esc huỷ").foregroundStyle(Pixel.muted)
         }
     }
 
@@ -113,7 +121,7 @@ struct FeedbackHUDView: View {
     private static func entry(_ text: String, caretOn: Bool) -> Text {
         let caret = Text(verbatim: "▌").foregroundColor(caretOn ? Pixel.text : Color.clear)
         guard !text.isEmpty else {
-            let hint = Text(verbatim: "Gõ nội dung rồi nhấn Enter…").foregroundColor(Pixel.muted)
+            let hint = Text(verbatim: "Gõ nội dung…").foregroundColor(Pixel.muted)
             return Text("\(caret)\(hint)")
         }
         return Text("\(Text(verbatim: tail(text)))\(caret)")
@@ -124,19 +132,24 @@ struct FeedbackHUDView: View {
     }
 }
 
-/// A floating panel at the bottom of the screen. It takes no focus and no clicks, so the app the
-/// user is typing in stays active and every key still reaches the input method.
+/// The panel never becomes key, so a click must reach the X button on the first try.
+private final class HUDHostingView: NSHostingView<FeedbackHUDView> {
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+}
+
+/// A floating panel at the bottom of the screen. It takes no focus, so the app the user is typing in
+/// stays active and every key still reaches the input method. Only the X button takes a click.
 @MainActor
 final class FeedbackHUD {
     static let shared = FeedbackHUD()
 
     private let model = HUDModel()
     private let panel: NSPanel
-    private let host: NSHostingView<FeedbackHUDView>
+    private let host: HUDHostingView
     private var hideTask: Task<Void, Never>?
 
     private init() {
-        host = NSHostingView(rootView: FeedbackHUDView(model: model))
+        host = HUDHostingView(rootView: FeedbackHUDView(model: model))
         panel = NSPanel(
             contentRect: .zero,
             styleMask: [.borderless, .nonactivatingPanel],
@@ -148,10 +161,15 @@ final class FeedbackHUD {
         panel.isOpaque = false
         panel.backgroundColor = .clear
         panel.hasShadow = true
-        panel.ignoresMouseEvents = true
         panel.hidesOnDeactivate = false
         panel.isReleasedWhenClosed = false
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .transient]
+    }
+
+    /// Runs when the user presses the X.
+    var onClose: (@MainActor () -> Void)? {
+        get { model.onClose }
+        set { model.onClose = newValue }
     }
 
     func show(_ state: HUDState) {
