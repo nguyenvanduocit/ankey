@@ -1,5 +1,7 @@
 # Ankey
 
+![Ankey: Telex Vietnamese input for macOS](.github/social-preview.png)
+
 A Telex Vietnamese input method for macOS. It does one thing: type Vietnamese with Telex, correctly and without getting in the way of English.
 
 - **Telex only.** `aa` gives `â`, `dd` gives `đ`, `s f r x j` set the tone.
