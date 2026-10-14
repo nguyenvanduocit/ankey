@@ -6,6 +6,55 @@ final class AnkeyInputController: IMKInputController {
     private var session = Session()
     private let anywhere = NSRange(location: NSNotFound, length: NSNotFound)
 
+    // Overriding handle makes it the only entry point: IMK stops calling inputText and
+    // didCommand itself. Route every key here.
+    // An app selects on Cmd+A before a commit sent at that moment arrives. Cmd and Ctrl go down
+    // before the letter, so the word is committed on the modifier. Asking for modifier events
+    // also turns off IMK's commit-on-click, so mouse clicks commit here too.
+    override func recognizedEvents(_ sender: Any!) -> Int {
+        let mask: NSEvent.EventTypeMask = [.keyDown, .flagsChanged, .leftMouseDown, .rightMouseDown, .otherMouseDown]
+        return Int(mask.rawValue)
+    }
+
+    override func handle(_ event: NSEvent!, client sender: Any!) -> Bool {
+        guard let event else { return false }
+        switch event.type {
+        case .flagsChanged:
+            if !event.modifierFlags.isDisjoint(with: [.command, .control]) {
+                commit(sender, Settings.load(), expand: false)
+            }
+            return false
+        case .leftMouseDown, .rightMouseDown, .otherMouseDown:
+            commit(sender, Settings.load(), expand: false)
+            return false
+        case .keyDown:
+            break
+        default:
+            return false
+        }
+        if !event.modifierFlags.isDisjoint(with: [.command, .control]) {
+            commit(sender, Settings.load(), expand: false)
+            return false
+        }
+        if let selector = Self.commands[event.keyCode] {
+            return didCommand(by: selector, client: sender)
+        }
+        if let text = event.characters, let scalar = text.unicodeScalars.first,
+           !(0xF700...0xF8FF).contains(scalar.value) {
+            return inputText(text, client: sender)
+        }
+        commit(sender, Settings.load(), expand: false)
+        return false
+    }
+
+    private static let commands: [UInt16: Selector] = [
+        51: #selector(NSResponder.deleteBackward(_:)),
+        36: #selector(NSResponder.insertNewline(_:)),
+        76: #selector(NSResponder.insertNewline(_:)),
+        48: #selector(NSResponder.insertTab(_:)),
+        53: #selector(NSResponder.cancelOperation(_:)),
+    ]
+
     override func inputText(_ string: String!, client sender: Any!) -> Bool {
         let settings = Settings.load()
         if settings.isExcluded(bundleID: textClient(sender)?.bundleIdentifier()) {
