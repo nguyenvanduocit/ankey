@@ -34,11 +34,11 @@ final class AnkeyInputController: IMKInputController {
         switch event.type {
         case .flagsChanged:
             if !event.modifierFlags.isDisjoint(with: [.command, .control]) {
-                commit(sender, context(sender), expand: false)
+                leaveWord(sender)
             }
             return false
         case .leftMouseDown, .rightMouseDown, .otherMouseDown:
-            commit(sender, context(sender), expand: false)
+            leaveWord(sender)
             return false
         case .keyDown:
             break
@@ -46,7 +46,7 @@ final class AnkeyInputController: IMKInputController {
             return false
         }
         if !event.modifierFlags.isDisjoint(with: [.command, .control]) {
-            commit(sender, context(sender), expand: false)
+            leaveWord(sender)
             return false
         }
         if let selector = Self.commands[event.keyCode] {
@@ -56,7 +56,7 @@ final class AnkeyInputController: IMKInputController {
            !(0xF700...0xF8FF).contains(scalar.value) {
             return inputText(text, client: sender)
         }
-        commit(sender, context(sender), expand: false)
+        leaveWord(sender)
         return false
     }
 
@@ -203,6 +203,12 @@ final class AnkeyInputController: IMKInputController {
         Self.jokeIndex += 1
         NSApp.activate(ignoringOtherApps: true)
         runPixelAlert(title: joke.title, message: joke.body, buttons: [joke.button])
+    }
+
+    /// The caret may now sit anywhere, so the words typed before say nothing about the next one.
+    private func leaveWord(_ sender: Any!) {
+        commit(sender, context(sender), expand: false)
+        session.forgetContext()
     }
 
     private func commit(_ sender: Any!, _ ctx: Context, expand: Bool) {
