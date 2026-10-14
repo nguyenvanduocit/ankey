@@ -14,11 +14,26 @@ struct Session {
     /// The language of the last finished word that showed one. Ambiguous words follow it.
     private var previous: Language?
     private var endsSentence = false
+    /// The boundary key that ended the word, until `finish` reads it.
+    private var boundary: Character?
+    /// The last finished word showed Vietnamese. Only a dot right after it reads as prose.
+    private var afterVietnamese = false
+    /// The word follows code punctuation with no space (`my_var`), so it is code and stays as typed.
+    private var glued = false
+
+    /// Keys that join two words into one code token. Only characters that never open a phrase in
+    /// prose are here: `/` (và/hoặc), brackets (`[hoàn thành]`) and `*` (bold) also appear in Vietnamese.
+    private static let glue: Set<Character> = ["_", "@", "\\", "=", "|", "&", "$", "^", "~"]
 
     var isComposing: Bool { !raw.isEmpty }
 
     func display(_ settings: Settings) -> String {
-        Engine.render(raw, settings, after: previous)
+        Engine.render(raw, settings, after: previous, glued: glued)
+    }
+
+    /// A dot glues words in `foo.bar` and `README.md`, not after Vietnamese (`ừm...tôi`).
+    private static func glues(_ ch: Character, afterVietnamese: Bool) -> Bool {
+        glue.contains(ch) || (ch == "." && !afterVietnamese)
     }
 
     /// The text a finished word becomes. `expand` is true only for word-ending keys.
@@ -31,7 +46,10 @@ struct Session {
     mutating func finish(_ settings: Settings, expand: Bool) -> String {
         let text = committed(settings, expand: expand)
         let expanded = expand && Engine.expansion(for: raw, settings) != nil
-        let language = expanded ? nil : Engine.analyze(raw, settings, after: previous).language
+        let language = expanded ? nil : Engine.analyze(raw, settings, after: previous, glued: glued).language
+        glued = boundary.map { Self.glues($0, afterVietnamese: language == .vietnamese) } ?? false
+        afterVietnamese = language == .vietnamese
+        boundary = nil
         if endsSentence {
             previous = nil
         } else if let language {
@@ -48,11 +66,15 @@ struct Session {
         raw = ""
         previous = .english
         endsSentence = false
+        glued = false
+        afterVietnamese = false
+        boundary = nil
         return text
     }
 
     mutating func forgetContext() {
         previous = nil
+        glued = false
     }
 
     mutating func push(_ ch: Character) -> Push {
@@ -63,9 +85,12 @@ struct Session {
         let sentenceEnd = ".!?".contains(ch)
         if raw.isEmpty {
             if sentenceEnd { previous = nil }
+            glued = Self.glues(ch, afterVietnamese: afterVietnamese)
+            if ch != "." { afterVietnamese = false }
             return .pass
         }
         endsSentence = sentenceEnd
+        boundary = ch
         return .commit
     }
 
@@ -90,24 +115,27 @@ enum Engine {
         ch.isASCII && ch.isLetter
     }
 
-    static func render(_ raw: String, _ settings: Settings = Settings(), after previous: Language? = nil) -> String {
-        analyze(raw, settings, after: previous).text
+    static func render(
+        _ raw: String, _ settings: Settings = Settings(), after previous: Language? = nil, glued: Bool = false
+    ) -> String {
+        analyze(raw, settings, after: previous, glued: glued).text
     }
 
     /// The text a word shows and the language it reveals. `language` is nil when the
     /// word reads the same in both. `previous` is the language of the word before it.
     static func analyze(
-        _ raw: String, _ settings: Settings, after previous: Language?
+        _ raw: String, _ settings: Settings, after previous: Language?, glued: Bool = false
     ) -> (text: String, language: Language?) {
         var atoms: [Atom] = []
         var tone = Tone.none
         var toneFrom: Character?
+        var markFrom: Character?
         var escaped: Character?
         var literal = ""
         for ch in raw {
             let upper = ch.isLetter && ch.isUppercase
             let key = Character(String(ch).lowercased())
-            let undidMark = consumeTelex(&atoms, &tone, &toneFrom, &escaped, key: key, upper: upper)
+            let undidMark = consumeTelex(&atoms, &tone, &toneFrom, &markFrom, &escaped, key: key, upper: upper)
             // The first press of an undone mark already sits in the literal text.
             if !undidMark { literal.append(ch) }
         }
@@ -115,8 +143,10 @@ enum Engine {
         let out = compose(atoms, tone: tone, style: settings.toneStyle)
         let language: Language? = out == literal ? nil : .vietnamese
         guard settings.restoreRaw else { return (out, language) }
+        if glued { return (literal, .english) }
         let word = raw.lowercased()
-        if settings.keepEnglish.contains(word) || (previous == .english && ambiguous.contains(word)) {
+        if English.always.contains(word) || settings.keepEnglish.contains(word)
+            || (previous == .english && English.context.contains(word)) {
             return (literal, .english)
         }
         let abbreviation = settings.abbreviation && settings.shorthand.contains(out.lowercased())
@@ -125,13 +155,6 @@ enum Engine {
         }
         return (out, language)
     }
-
-    /// English words that are also Vietnamese words people type. They stay English
-    /// right after an English word and convert everywhere else.
-    private static let ambiguous: Set<String> = [
-        "as", "car", "cars", "per", "last", "docs", "max", "var", "ref", "bar", "bus", "gas",
-        "sex", "tax", "too", "low", "see", "own", "down", "been",
-    ]
 
     /// Looks the typed keys up in the macro table and copies the typed case onto the text.
     /// The table comes from `Settings.load()`, so its shortcuts are already lowercase.
@@ -191,14 +214,19 @@ private let telexTone: [Character: Tone] = [
 // MARK: - Telex consume
 
 /// Returns true when the key undid a mark (`noww` → `now`).
+/// `markFrom` is the mark key typed right before this key, the only key that can undo it.
 private func consumeTelex(
     _ atoms: inout [Atom],
     _ tone: inout Tone,
     _ toneFrom: inout Character?,
+    _ markFrom: inout Character?,
     _ escaped: inout Character?,
     key: Character,
     upper: Bool
 ) -> Bool {
+    let afterTone = toneFrom != nil
+    let repeated = markFrom == key
+    markFrom = nil
     if key == escaped {
         atoms.append(Atom(base: key, upper: upper))
         escaped = nil
@@ -235,8 +263,10 @@ private func consumeTelex(
     }
     toneFrom = nil
     if let intent = telexIntent(key) {
-        switch applyMark(&atoms, key: key, upper: upper, intent) {
-        case .applied: return false
+        switch applyMark(&atoms, key: key, upper: upper, repeated: repeated, afterTone: afterTone, intent) {
+        case .applied:
+            markFrom = key
+            return false
         case .undone: return true
         case .none: break
         }
@@ -273,18 +303,21 @@ private func telexIntent(_ key: Character) -> Intent? {
 
 /// A horn or breve finds its vowel in the last vowel cluster, wherever the key is typed after it.
 /// With no open vowel left, repeating the key undoes the mark and keeps the key as a literal letter.
-/// A circumflex key marks and undoes only the vowels right before it.
-private func applyMark(_ atoms: inout [Atom], key: Character, upper: Bool, _ intent: Intent) -> MarkResult {
+/// A circumflex key marks and undoes only the vowels right before it. Only the very next key
+/// undoes a mark, so a tone key between two e's keeps `reference` whole.
+private func applyMark(
+    _ atoms: inout [Atom], key: Character, upper: Bool, repeated: Bool, afterTone: Bool, _ intent: Intent
+) -> MarkResult {
     if case .stroke = intent { return applyStroke(&atoms, key: key, upper: upper) }
     let cluster = vowelRange(atoms)
     guard !cluster.isEmpty else { return .none }
-    if let (i, hat) = markTarget(atoms, cluster, intent) {
+    if let (i, hat) = markTarget(atoms, cluster, afterTone: afterTone, intent) {
         atoms[i].hat = hat
         atoms[i].markKey = key
         return .applied
     }
     let marked = cluster.filter { atoms[$0].markKey == key }
-    guard !marked.isEmpty else { return .none }
+    guard repeated, !marked.isEmpty else { return .none }
     // The repeat that applies a circumflex also undoes it, and only right after the vowels.
     if case .circumflex = intent, cluster.upperBound != atoms.count { return .none }
     for i in marked {
@@ -312,7 +345,7 @@ private func applyStroke(_ atoms: inout [Atom], key: Character, upper: Bool) -> 
     return .none
 }
 
-private func markTarget(_ atoms: [Atom], _ cluster: Range<Int>, _ intent: Intent) -> (Int, Hat)? {
+private func markTarget(_ atoms: [Atom], _ cluster: Range<Int>, afterTone: Bool, _ intent: Intent) -> (Int, Hat)? {
     let open = cluster.filter { atoms[$0].hat == .none && atoms[$0].markKey == nil }
     let bases = String(cluster.map { atoms[$0].base })
 
@@ -333,8 +366,13 @@ private func markTarget(_ atoms: [Atom], _ cluster: Range<Int>, _ intent: Intent
         if let i = hornTarget() { return (i, .horn) }
         return breveTarget().map { ($0, .breve) }
     case .circumflex(let letter):
-        // A doubled letter marks only the vowel right before it: `data` and `beta` stay English.
-        guard let i = atoms.indices.last, open.contains(i), atoms[i].base == letter else { return nil }
+        // The key marks the nearest open vowel it repeats, right after it (`aa`), after the vowels
+        // that follow (`vayaj` is vậy) or after the final (`vietej` is việt).
+        // A tone key right before it breaks the pair: `oversee` and `verse` stay English.
+        // Words like `data` and `photo` become Vietnamese syllables this way, so `English` lists them.
+        guard !afterTone, let i = open.last(where: { atoms[$0].base == letter }) else { return nil }
+        // A key that continues a real syllable stays a plain letter: `ngoeo` keeps its last o.
+        if i != atoms.indices.last, isSyllable(atoms + [Atom(base: letter, upper: false)], tone: .none) { return nil }
         return (i, .circumflex)
     case .stroke:
         return nil

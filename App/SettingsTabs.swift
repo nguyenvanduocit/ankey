@@ -132,7 +132,7 @@ struct MacrosTab: View {
 
             PixelSection(
                 title: "Từ tiếng Anh giữ nguyên",
-                footer: "Những từ này luôn ra đúng chữ đã gõ, ví dụ test không thành tét. Cần bật mục giữ nguyên chữ ở tab Chung."
+                footer: "Ankey đã có sẵn hơn 200 từ tiếng Anh thường gặp như reset, boot, test. Thêm từ của bạn ở đây, chúng luôn ra đúng chữ đã gõ. Cần bật mục giữ nguyên chữ ở tab Chung."
             ) {
                 ForEach(model.value.keepEnglish, id: \.self) { word in
                     WordRow(word: word) {

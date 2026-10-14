@@ -126,12 +126,8 @@ struct Settings: Equatable {
     var escClears = true
     var macros: [Macro] = []
     var shorthand = ["\u{0111}c"]
-    /// English words that the rules would turn into Vietnamese (`test` → `tét`). Typed keys, lowercase.
-    var keepEnglish = [
-        "of", "if", "is", "or", "us", "has", "his", "this", "there", "here", "these", "now", "how",
-        "list", "lists", "most", "best", "test", "tests", "cost", "costs", "rest", "host", "hosts", "six",
-        "mix", "box",
-    ]
+    /// The user's own English words, on top of the built-in `English` lists. Typed keys, lowercase.
+    var keepEnglish: [String] = []
     var appRules: [AppRule] = []
 }
 

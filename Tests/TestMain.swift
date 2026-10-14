@@ -445,9 +445,15 @@ func checkSyllables() {
         settings.keepEnglish = []
         return Engine.render(raw, settings).precomposedStringWithCanonicalMapping
     }
+    var english = 0
     for syllable in Syllables.all {
         let keys = telexKeys(syllable)
         for (mode, raw) in [("inline", keys.inline), ("deferred", keys.deferred)] {
+            // The keys of an always-English word type that word, by design.
+            if English.always.contains(raw) {
+                english += 1
+                continue
+            }
             let want = syllable.precomposedStringWithCanonicalMapping
             if render(raw, .modern) != want && render(raw, .classic) != want {
                 failed += 1
@@ -455,7 +461,7 @@ func checkSyllables() {
             }
         }
     }
-    print("syllables \(Syllables.all.count)")
+    print("syllables \(Syllables.all.count), \(english) key orders typed as English words")
 }
 
 /// A repeated a, e or o undoes a circumflex only right after the marked vowels.
@@ -463,28 +469,61 @@ func checkDistantRepeat() {
     for word in ["reserved", "needed", "agreement", "weekend", "toronto", "difference", "defense"] {
         check(word, word)
     }
+    // A tone key between the vowels breaks the repeat: no letter is lost.
+    for word in ["reference", "references", "preference", "therefore", "referee", "interference"] {
+        check(word, word)
+    }
+}
+
+/// A circumflex key may come after the vowels that follow it or after the final.
+func checkLateCircumflex() {
+    for (raw, want) in [
+        ("vayaj", "v\u{1ead}y"), ("toio", "t\u{00f4}i"), ("toioj", "t\u{1ed9}i"), ("nguoio", "ngu\u{00f4}i"),
+        ("caua", "c\u{00e2}u"), ("vietej", "vi\u{1ec7}t"), ("vietes", "vi\u{1ebf}t"), ("hocoj", "h\u{1ed9}c"),
+        ("Vietej", "Vi\u{1ec7}t"), ("VIETEJ", "VI\u{1ec6}T"),
+        // A key that continues a real syllable stays a plain letter.
+        ("ngoeos", "ng\u{00f3}eo"),
+    ] { check(raw, want) }
+    // A tone key right before the vowel breaks the pair, and English words stay English.
+    for word in [
+        "data", "beta", "verse", "oversee", "video", "photo", "queue", "pete", "reset", "reference", "reserved",
+        "toronto", "banana", "americano", "alabama",
+    ] { check(word, word) }
+    // Words that are common in Vietnamese win over the English look-alike.
+    check("theme", "th\u{00ea}m")
 }
 
 func checkKeepEnglish() {
-    check("test", Settings(), "test")
-    check("Test", Settings(), "Test")
-    check("TEST", Settings(), "TEST")
-    var empty = Settings()
-    empty.keepEnglish = []
-    check("test", empty, "t\u{00e9}t")
+    // The built-in list keeps these English with no setting saved.
+    for word in ["test", "reset", "boot", "row", "saw", "law", "door", "asap"] {
+        check(word, Settings(), word)
+        check(word.capitalized, Settings(), word.capitalized)
+        check(word.uppercased(), Settings(), word.uppercased())
+    }
+    check("tes", Settings(), "t\u{00e9}")
     var custom = Settings()
     custom.keepEnglish = ["tes"]
     check("tes", custom, "tes")
-    check("test", custom, "t\u{00e9}t")
+    check("test", custom, "test")
     // Keeping English is part of restoring raw text.
     check("test", Settings(restoreRaw: false), "t\u{00e9}t")
     // Words people type as Vietnamese stay Vietnamese by default.
-    for raw in ["cams", "tets"] { check(raw, Settings(), Engine.render(raw, empty)) }
+    for (raw, want) in [("cams", "c\u{00e1}m"), ("tets", "t\u{00e9}t"), ("cos", "c\u{00f3}"), ("nos", "n\u{00f3}"), ("gif", "g\u{00ec}"), ("aj", "\u{1ea1}"), ("oo", "\u{00f4}"), ("chaos", "ch\u{00e1}o")] {
+        check(raw, Settings(), want)
+    }
+    // The Vietnamese-common ones stay English right after an English word.
+    expect(Engine.render("chaos", Settings(), after: .english), "chaos", "chaos after English")
+    expect(Engine.render("chaos", Settings(), after: .vietnamese), "ch\u{00e1}o", "chaos after Vietnamese")
+    // Nothing built in converts: every word of the lists stays as typed, in any case.
+    for word in English.always { check(word, Settings(), word) }
+    for word in English.context {
+        expect(Engine.render(word, Settings(), after: .english), word, "\(word) after English")
+    }
 
     let suite = "ankey.tests.\(UUID().uuidString)"
     let defaults = UserDefaults(suiteName: suite)!
     defer { defaults.removePersistentDomain(forName: suite) }
-    expect(Settings.load(from: defaults).keepEnglish.contains("test"), true, "keepEnglish default")
+    expect(Settings.load(from: defaults).keepEnglish, [], "keepEnglish default")
     var settings = Settings()
     settings.keepEnglish = [" TEST ", "", "test", "best"]
     settings.save(to: defaults)
@@ -523,10 +562,12 @@ func checkContext() {
     // A sentence end starts fresh.
     _ = typed(&session, "commit")
     expect(session.push("."), .pass, "dot with nothing composing")
+    expect(session.push(" "), .pass, "space after the dot")
     expect(typed(&session, "as"), "\u{00e1}", "as after a sentence end")
     for ch in "commit" { _ = session.push(ch) }
     expect(session.push("."), .commit, "dot commits")
     _ = session.finish(s, expand: false)
+    expect(session.push(" "), .pass, "space after the word and dot")
     expect(typed(&session, "as"), "\u{00e1}", "as after word and dot")
     // Context is forgotten on request.
     _ = typed(&session, "commit")
@@ -541,13 +582,52 @@ func checkContext() {
     expect(typed(&session, "as"), "as", "macro keeps the earlier language")
 }
 
-func checkRawRestore() {
-    var none = Settings()
-    none.keepEnglish = []
+/// Types a line the way the controller does: each key joins the word, or ends it.
+func typeLine(_ line: String, _ settings: Settings = Settings()) -> String {
     var session = Session()
-    for ch in "test" { _ = session.push(ch) }
+    var document = ""
+    for ch in line {
+        switch session.push(ch) {
+        case .consumed: break
+        case .pass: document.append(ch)
+        case .commit:
+            document += session.finish(settings, expand: true)
+            document.append(ch)
+        }
+    }
+    return document + session.finish(settings, expand: false)
+}
+
+/// A word glued to code punctuation is code, not Vietnamese.
+func checkCodeContext() {
+    for line in [
+        "my_var", "foo.bar(x)", "user@bar", "x=var", "a|bar", "a&bar", "$bar", "a^bar", "~bar", "\\bar",
+        "www.google.com", "README.md", "package.json", "get_user_by_row", "foo.row", "v2.reset",
+    ] {
+        expect(typeLine(line), line, "code token \(line)")
+    }
+    // Brackets, slashes and bold marks open Vietnamese phrases too.
+    expect(typeLine("[hoanf thanhf]"), "[ho\u{00e0}n th\u{00e0}nh]", "bracket")
+    expect(typeLine("vaf/hoawcj"), "v\u{00e0}/ho\u{1eb7}c", "slash")
+    expect(typeLine("**hoanf**"), "**ho\u{00e0}n**", "bold")
+    expect(typeLine("<hoanf>"), "<ho\u{00e0}n>", "angle bracket")
+    // Spaces end the token, and Vietnamese before or after a dot or comma stays Vietnamese.
+    expect(typeLine("my_var vas"), "my_var v\u{00e1}", "space ends the token")
+    expect(typeLine("tooi.vas"), "t\u{00f4}i.v\u{00e1}", "dot after Vietnamese")
+    expect(typeLine("uwf...tooi"), "\u{1eeb}...t\u{00f4}i", "ellipsis")
+    expect(typeLine("vas.vas"), "v\u{00e1}.v\u{00e1}", "dot after a Vietnamese word")
+    expect(typeLine("anh,vas"), "anh,v\u{00e1}", "comma is not code")
+    expect(typeLine("(vas)"), "(v\u{00e1})", "parenthesis is not code")
+    expect(typeLine("anh-vas"), "anh-v\u{00e1}", "hyphen is not code")
+    expect(typeLine("my_var", Settings(restoreRaw: false)), "my_v\u{1ea3}", "restoreRaw off")
+}
+
+func checkRawRestore() {
+    let none = Settings()
+    var session = Session()
+    for ch in "tets" { _ = session.push(ch) }
     expect(session.display(none), "t\u{00e9}t", "converted before Esc")
-    expect(session.finishRaw(), "test", "Esc gives the typed keys")
+    expect(session.finishRaw(), "tets", "Esc gives the typed keys")
     expect(session.isComposing, false, "nothing composing after Esc")
     // The word was English, so the next ambiguous word stays English.
     for ch in "as" { _ = session.push(ch) }
@@ -584,6 +664,8 @@ struct TestRunner {
         checkAttested()
         checkKeepEnglish()
         checkContext()
+        checkLateCircumflex()
+        checkCodeContext()
         checkRawRestore()
         checkDistantRepeat()
         checkSyllables()

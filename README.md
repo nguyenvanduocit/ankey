@@ -44,6 +44,8 @@ Later updates install themselves. See [Updates](#updates).
 
 A tone or mark key can come after the whole syllable: `vieetj` gives `việt`, `nguoiwf` gives `người`, and `duwocj` and `duocwj` both give `dược`.
 
+The circumflex key can come late. Type it after the vowels that follow, or after the final: `vayaj` gives `vậy`, `toio` gives `tôi`, `vietej` gives `việt`. A tone key right before it, as in `verse` or `reference`, keeps the letters as typed.
+
 Repeat a key to undo it and keep the literal letters: `aaa` gives `aa`, `noww` gives `now`, `ass` gives `ass`.
 
 **Backspace** removes one typed key. **Esc** gives back the keys you typed when Ankey has added marks (`test` instead of `tét`). On a word without marks, Esc cancels the word, or commits it if you turn that off in Settings.
@@ -69,9 +71,14 @@ Words such as `đc` are not Vietnamese syllables, so Ankey would leave `ddc` as 
 
 ### English words
 
-Some English words are also valid Vietnamese syllables once Telex adds a tone: `test` would become `tét`, `list` would become `lít`. The **Từ tiếng Anh giữ nguyên** list keeps them as typed. It starts with `test`, `best`, `list`, `most`, `is`, `of`, `this`, `there` and similar words, and you can add or remove words.
+Some English words are also valid Vietnamese syllables once Telex adds a tone: `reset` would become `rết`, `test` would become `tét`. Ankey ships two built-in sets of such words, taken from the 20,000 most common English words, so mixed Vietnamese and English text needs no setup.
 
-A second, built-in set covers words people also type as Vietnamese: `as`, `car`, `too`, `own`, `see` and a few more. They stay English right after an English word (`git commit as`) and convert after a Vietnamese word or at the start of a sentence (`cảm own` gives `cảm ơn`). Ankey forgets the language at a period, `!`, `?`, Return, Tab and when you switch away.
+- **Always English.** Words whose Vietnamese reading is rare, such as `reset`, `boot`, `row`, `saw`, `door`, `test`, `list` and `asap`, come out as typed everywhere.
+- **English after English.** Words people also type as Vietnamese, such as `as`, `car`, `last`, `too`, `own` and `chaos` (`cháo`), stay English right after an English word (`git commit as`) and convert after a Vietnamese word or at the start of a sentence (`cảm own` gives `cảm ơn`). Ankey forgets the language at a period, `!`, `?`, Return, Tab and when you switch away.
+
+The **Từ tiếng Anh giữ nguyên** list in Settings adds your own words to the first set. A word glued to code punctuation stays as typed, so `my_var`, `user@host` and `foo.bar(x)` need no escape. Press Esc right after any word to get the keys you typed.
+
+The Vietnamese words that share keys with the first set (`bus` is `bú` but `boot` is not `bôt`) are chosen by frequency in Vietnamese. Words below rank 500 always convert (`cos` is `có`, `nos` is `nó`).
 
 ## Updates
 
