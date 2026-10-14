@@ -137,6 +137,10 @@ struct Settings: Equatable {
     /// The user's own English words, on top of the built-in `English` lists. Typed keys, lowercase.
     var keepEnglish: [String] = []
     var appRules: [AppRule] = []
+    /// Counts events on this machine for the statistics tab. Off until the user turns it on.
+    var collectStats = false
+    /// Sends the counters to Datadog once a day. Needs `collectStats`, off until the user turns it on.
+    var shareStats = false
 }
 
 extension Settings {
@@ -151,6 +155,13 @@ extension Settings {
         static let keepEnglish = "keepEnglish"
         static let appRules = "appRules"
         static let excludedApps = "excludedApps"
+        static let collectStats = "collectStats"
+        static let shareStats = "shareStats"
+    }
+
+    /// One bool read, so the key path can ask before it counts anything.
+    static func collectsStats(in defaults: UserDefaults = .standard) -> Bool {
+        defaults.bool(forKey: Key.collectStats)
     }
 
     /// The rule for an app. An unknown client, or one without a bundle ID, gets the default rule.
@@ -175,6 +186,8 @@ extension Settings {
         settings.restoreRaw = defaults.object(forKey: Key.restoreRaw) as? Bool ?? settings.restoreRaw
         settings.abbreviation = defaults.object(forKey: Key.abbreviation) as? Bool ?? settings.abbreviation
         settings.escClears = defaults.object(forKey: Key.escClears) as? Bool ?? settings.escClears
+        settings.collectStats = collectsStats(in: defaults)
+        settings.shareStats = settings.collectStats && defaults.bool(forKey: Key.shareStats)
         if let rows = defaults.array(forKey: Key.macros) as? [[String: String]] {
             let macros = rows.compactMap { row -> Macro? in
                 guard let shortcut = row["shortcut"], let text = row["text"] else { return nil }
@@ -202,6 +215,8 @@ extension Settings {
         defaults.set(restoreRaw, forKey: Key.restoreRaw)
         defaults.set(abbreviation, forKey: Key.abbreviation)
         defaults.set(escClears, forKey: Key.escClears)
+        defaults.set(collectStats, forKey: Key.collectStats)
+        defaults.set(shareStats, forKey: Key.shareStats)
         defaults.set(encoding.rawValue, forKey: Key.encoding)
         defaults.set(macros.map { ["shortcut": $0.shortcut, "text": $0.text] }, forKey: Key.macros)
         defaults.set(shorthand, forKey: Key.shorthand)

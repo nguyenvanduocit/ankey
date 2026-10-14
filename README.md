@@ -42,6 +42,23 @@ Engine không sửa chữ đang hiện trên màn hình. Nó giữ **các phím 
 
 Vì thấy cả từ nên phím dấu không cần đúng thứ tự. `vieetj` và `vietej` đều ra `việt`. `duwocj` và `duocwj` đều ra `dược`. Phím mũ có thể đến sau các nguyên âm theo sau (`vayaj` → `vậy`, `toio` → `tôi`) hoặc sau phụ âm cuối. Phím dấu thanh nằm ngay trước phím mũ thì phá cặp, nên `verse` và `reference` giữ nguyên mọi chữ.
 
+## Thống kê
+
+Ankey không gửi gì đi, trừ khi bạn bật trong Cài đặt → Thống kê. Có hai công tắc, cả hai mặc định tắt.
+
+- **Ghi thống kê trên máy.** Ankey đếm số lần: từ được đổi dấu, từ giữ nguyên, Esc trả lại chữ đã gõ, chèn trực tiếp bị lệch. Chỉ lưu trên máy, giữ 30 ngày. Tắt là xoá hết.
+- **Gửi thống kê tới Datadog.** Mỗi ngày gửi tối đa một lần, chỉ các ngày đã qua. Tab Thống kê cho xem đúng dữ liệu sẽ gửi.
+
+Không bao giờ lưu hay gửi chữ bạn gõ, phím bấm, tên ứng dụng hay nội dung gõ tắt. Các trường được gửi nằm trong danh sách cố định ở `Tests/TestMain.swift`, thêm một trường mới thì test đỏ cho tới khi danh sách đổi theo.
+
+Khi bạn bật gửi, Datadog nhận:
+
+- số liệu hiển thị trong tab Thống kê, cùng phiên bản Ankey, phiên bản macOS, kiểu đặt dấu, bảng mã và số luật theo ứng dụng (chỉ số lượng, không có tên);
+- một ID ngẫu nhiên của bản cài này, tạo khi bật gửi và bỏ khi tắt;
+- địa chỉ IP và user agent (`Ankey/<phiên bản> (macOS <phiên bản>)`) của máy bạn, vì mọi kết nối mạng đều gửi hai thứ đó.
+
+Datadog Logs không xoá được dữ liệu theo từng ID. Số liệu đã gửi nằm ở đó tới khi hết hạn lưu giữ của Datadog.
+
 ## Cảm ơn
 
 Cảm ơn **FireGroup** đã tài trợ tài khoản Apple Developer dùng để ký và notarize Ankey.

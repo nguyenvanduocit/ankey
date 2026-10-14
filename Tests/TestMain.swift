@@ -729,6 +729,185 @@ func checkEncoding() {
     expect(settings.encoding(for: settings.rule(for: nil)), .tcvn3, "no bundle id follows the default")
 }
 
+func checkStats() {
+    let suite = "ankey.tests.stats.\(UUID().uuidString)"
+    let defaults = UserDefaults(suiteName: suite)!
+    defer { defaults.removePersistentDomain(forName: suite) }
+    let noon = Date(timeIntervalSince1970: 1_792_000_000)
+
+    // Off by default: nothing is stored.
+    expect(Settings().collectStats, false, "stats default off")
+    StatsStore.record(.wordKept, now: noon, defaults: defaults)
+    expect(StatsStore.load(from: defaults), StatsLog(), "off records nothing")
+    expect(defaults.object(forKey: "stats") == nil, true, "off writes no key")
+
+    // On: events add up per day, survive a reload, and clear on request.
+    var settings = Settings()
+    settings.collectStats = true
+    settings.save(to: defaults)
+    expect(Settings.load(from: defaults).collectStats, true, "stats setting round trip")
+    StatsStore.record(.wordKept, now: noon, defaults: defaults)
+    StatsStore.record(.wordKept, now: noon, defaults: defaults)
+    StatsStore.record(.escRestoredRaw, now: noon, defaults: defaults)
+    let day = StatsLog.dayKey(noon)
+    let log = StatsStore.load(from: defaults)
+    expect(log.days[day]?[.wordKept], 2, "counts add up")
+    expect(log.days[day]?[.escRestoredRaw], 1, "events count apart")
+    expect(log.days[day]?[.directFallback], 0, "unseen event is zero")
+    StatsStore.clear(from: defaults)
+    expect(StatsStore.load(from: defaults), StatsLog(), "clear empties the log")
+
+    // Stored rows: bad day keys, unknown events and non-positive counts are dropped.
+    let loaded = StatsLog(stored: [
+        "2026-10-15": ["wordKept": 3, "wordChanged": -1, "secretWord": 9],
+        "xinchao": ["wordKept": 1],
+        "2026-1-5": ["wordKept": 1],
+    ])
+    expect(loaded.ordered.map(\.day), ["2026-10-15"], "only well-formed day keys load")
+    expect(loaded.days["2026-10-15"]?.stored, ["wordKept": 3], "only known positive counters load")
+
+    // Thirty days kept, oldest dropped.
+    var long = StatsLog()
+    for index in 1...40 { long.record(.wordKept, on: String(format: "2026-09-%02d", index)) }
+    expect(long.days.count, StatsLog.keepDays, "log keeps thirty days")
+    expect(long.ordered.first?.day, "2026-09-11", "oldest days go first")
+
+    expect(statsEvent(raw: "vieetj", committed: "vi\u{1ec7}t"), .wordChanged, "converted word is changed")
+    expect(statsEvent(raw: "hello", committed: "hello"), .wordKept, "same word is kept")
+    expect(statsEvent(raw: "", committed: ""), nil, "empty word says nothing")
+
+    // The payload: the exact keys, written down here on purpose. A new field fails this test until the
+    // list changes with it, so nothing joins the data without a visible edit.
+    var sample = StatsLog()
+    for event in StatsEvent.allCases { sample.record(event, on: "2026-10-15") }
+    var tcvn = Settings()
+    tcvn.encoding = .tcvn3
+    tcvn.appRules = [AppRule(bundleID: "com.secret.App")]
+    let payload = StatsPayload(appVersion: "1.4.0", macOS: "26.4", settings: tcvn, log: sample)
+    let events = payload.events(installID: "11111111-2222-3333-4444-555555555555")
+    expect(events.count, 1, "one event per day")
+    expect(Set(events[0].attributes.keys), [
+        "appVersion", "macOS", "toneStyle", "encoding", "appRuleCount", "day", "installID",
+        "wordChanged", "wordKept", "escRestoredRaw", "directFallback",
+    ], "payload attributes are the allowlist")
+    let strings = events[0].attributes.values.compactMap { value -> String? in
+        if case .string(let text) = value { return text }
+        return nil
+    }
+    expect(Set(strings), ["1.4.0", "26.4", "modern", "tcvn3", "2026-10-15", "11111111-2222-3333-4444-555555555555"], "payload strings are version, settings, day and install id only")
+    expect(events[0].attributes["appRuleCount"], .int(1), "payload counts rules without naming them")
+    expect(Set(payload.events(installID: nil)[0].attributes.keys).contains("installID"), false, "no install id until the user shares")
+
+    // The request: where it goes and what it carries.
+    let id = UUID(uuidString: "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE")!
+    let token = "pubTESTTOKENTESTTOKEN"
+    let request = LogIntake.request(events, host: "browser-intake-datadoghq.com", clientToken: token, userAgent: "Ankey/1.4.0 (macOS 26.4)", requestID: id)
+    expect(request.url?.absoluteString, "https://browser-intake-datadoghq.com/api/v2/logs?ddsource=ankey", "intake url")
+    expect(request.httpMethod, "POST", "intake method")
+    expect(request.value(forHTTPHeaderField: "DD-API-KEY"), token, "client token goes in DD-API-KEY")
+    expect(request.value(forHTTPHeaderField: "Content-Type"), "application/json", "intake content type")
+    expect(request.value(forHTTPHeaderField: "User-Agent"), "Ankey/1.4.0 (macOS 26.4)", "intake user agent")
+    expect(request.value(forHTTPHeaderField: "DD-REQUEST-ID"), id.uuidString, "intake request id")
+    expect(request.timeoutInterval, 10, "short timeout")
+    let sent = request.httpBody.flatMap { try? JSONSerialization.jsonObject(with: $0) as? [[String: Any]] } ?? []
+    expect(sent.count, 1, "body is an array of events")
+    expect(sent.first?["ddsource"] as? String, "ankey", "body source")
+    expect(sent.first?["service"] as? String, "ankey", "body service")
+    expect(sent.first?["message"] as? String, "ankey.stats.day", "body message")
+    expect(sent.first?["wordKept"] as? Int, 1, "body counters are numbers")
+    let body = String(data: request.httpBody ?? Data(), encoding: .utf8) ?? ""
+    expect(body.contains(token) || (request.url?.absoluteString.contains(token) ?? true), false, "token stays in the header only")
+    expect(body.contains("com.secret.App"), false, "body holds no bundle id")
+    let spoof = LogEvent(message: "m", attributes: ["service": .string("evil"), "ddsource": .string("evil"), "status": .string("evil")])
+    let spoofed = (try? JSONSerialization.jsonObject(with: LogIntake.body([spoof])) as? [[String: Any]])?.first
+    expect(spoofed?["service"] as? String, "ankey", "service cannot be overridden")
+    expect(spoofed?["ddsource"] as? String, "ankey", "source cannot be overridden")
+    expect(spoofed?["status"] as? String, "info", "status cannot be overridden")
+    expect(LogIntake.body(events) == LogIntake.body(events), true, "same events give the same bytes")
+
+    // Which days wait to be sent: finished days after the last upload.
+    var span = StatsLog()
+    for day in ["2026-10-13", "2026-10-14", "2026-10-15"] { span.record(.wordKept, on: day) }
+    expect(span.pending(uploadedThrough: nil, today: "2026-10-15").ordered.map(\.day), ["2026-10-13", "2026-10-14"], "today waits")
+    expect(span.pending(uploadedThrough: "2026-10-13", today: "2026-10-15").ordered.map(\.day), ["2026-10-14"], "sent days are not sent again")
+    expect(span.pending(uploadedThrough: "2026-10-14", today: "2026-10-15").ordered.map(\.day), [], "nothing pending")
+    expect(StatsUploadState(lastAttemptDay: "2026-10-15").isDue(on: "2026-10-15"), false, "one attempt a day")
+    expect(StatsUploadState(lastAttemptDay: "2026-10-14").isDue(on: "2026-10-15"), true, "a new day is due")
+    expect(StatsUploadState().isDue(on: "2026-10-15"), true, "first attempt is due")
+
+    // The install id lives while sharing and starts fresh after.
+    let first = StatsStore.installID(from: defaults)
+    expect(StatsStore.installID(from: defaults), first, "install id is stable")
+    StatsStore.forgetSharing(from: defaults)
+    expect(StatsStore.installID(from: defaults) == first, false, "forgetting starts a new identity")
+    StatsStore.forgetSharing(from: defaults)
+}
+
+final class RecordingSender: LogSender, @unchecked Sendable {
+    var batches: [[LogEvent]] = []
+    var fails = false
+    struct Down: Error {}
+
+    func send(_ events: [LogEvent]) async throws {
+        if fails { throw Down() }
+        batches.append(events)
+    }
+}
+
+func runAsync(_ work: @escaping () async -> Void) {
+    let done = DispatchSemaphore(value: 0)
+    Task { await work(); done.signal() }
+    done.wait()
+}
+
+func checkStatsUpload() {
+    let suite = "ankey.tests.upload.\(UUID().uuidString)"
+    let defaults = UserDefaults(suiteName: suite)!
+    defer { defaults.removePersistentDomain(forName: suite) }
+    let day: TimeInterval = 86_400
+    let today = Date(timeIntervalSince1970: 1_792_000_000)
+    let sender = RecordingSender()
+
+    func upload(_ now: Date) { runAsync { await StatsUploader.uploadIfDue(sender: sender, appVersion: "1.4.0", macOS: "26.4", now: now, defaults: defaults) } }
+
+    var settings = Settings()
+    settings.collectStats = true
+    settings.save(to: defaults)
+    StatsStore.record(.wordKept, now: today - day, defaults: defaults)
+
+    upload(today)
+    expect(sender.batches.count, 0, "collecting alone sends nothing")
+
+    settings.shareStats = true
+    settings.save(to: defaults)
+    upload(today)
+    expect(sender.batches.count, 1, "sharing sends the finished day")
+    expect(sender.batches.first?.first?.attributes["day"], .string(StatsLog.dayKey(today - day)), "the day sent is yesterday")
+    expect(sender.batches.first?.first?.attributes["installID"] != nil, true, "the batch carries the install id")
+    upload(today)
+    expect(sender.batches.count, 1, "no second send the same day")
+    upload(today + day)
+    expect(sender.batches.count, 1, "a sent day is not sent again")
+
+    // A failure is silent, is not retried the same day, and tries again the next day.
+    StatsStore.record(.wordKept, now: today + day, defaults: defaults)
+    sender.fails = true
+    upload(today + 2 * day)
+    expect(sender.batches.count, 1, "failed send adds no batch")
+    sender.fails = false
+    upload(today + 2 * day)
+    expect(sender.batches.count, 1, "no retry the same day")
+    upload(today + 3 * day)
+    expect(sender.batches.count, 2, "retry the next day")
+    expect(sender.batches.last?.first?.attributes["day"], .string(StatsLog.dayKey(today + day)), "the retry sends the missed day")
+
+    // Sharing off sends nothing, even on a new day.
+    settings.shareStats = false
+    settings.save(to: defaults)
+    StatsStore.record(.wordKept, now: today + 3 * day, defaults: defaults)
+    upload(today + 5 * day)
+    expect(sender.batches.count, 2, "sharing off sends nothing")
+}
 
 @main
 struct TestRunner {
@@ -739,6 +918,8 @@ struct TestRunner {
         checkMacroProblems()
         checkAppRules()
         checkEncoding()
+        checkStats()
+        checkStatsUpload()
         checkRelease()
         checkLoadTiming()
         checkExpansion()

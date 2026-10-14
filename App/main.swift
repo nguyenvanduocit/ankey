@@ -20,6 +20,7 @@ ankeyServer = IMKServer(name: connectionName, bundleIdentifier: Bundle.main.bund
 // The syllable index takes about 20 ms to build. Build it now so the first keystroke does not wait.
 _ = Engine.render("as")
 Updater.shared.startScheduledChecks()
+StatsSchedule.start()
 _ = NSApplicationMain(CommandLine.argc, CommandLine.unsafeArgv)
 
 private func enableAnkey() {

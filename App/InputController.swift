@@ -102,6 +102,7 @@ final class AnkeyInputController: IMKInputController {
         if name == "cancelOperation:" {
             guard session.isComposing else { return false }
             if session.display(ctx.settings) != session.raw {
+                StatsStore.record(.escRestoredRaw)
                 finalize(session.finishRaw(), sender, ctx)
                 return true
             }
@@ -178,7 +179,10 @@ final class AnkeyInputController: IMKInputController {
     }
 
     private func commit(_ sender: Any!, _ ctx: Context, expand: Bool) {
-        finalize(session.finish(ctx.settings, expand: expand), sender, ctx)
+        let raw = session.raw
+        let word = session.finish(ctx.settings, expand: expand)
+        if let event = statsEvent(raw: raw, committed: word) { StatsStore.record(event) }
+        finalize(word, sender, ctx)
     }
 
     /// Puts the finished word in the document and leaves nothing pending.
@@ -215,6 +219,7 @@ final class AnkeyInputController: IMKInputController {
         let length = shown.utf16.count
         let caret = client.selectedRange().location
         if length == 0 || caret == NSNotFound || caret < length {
+            if length > 0 { StatsStore.record(.directFallback) }
             client.insertText(text, replacementRange: anywhere)
         } else {
             client.insertText(text, replacementRange: NSRange(location: caret - length, length: length))
