@@ -46,11 +46,11 @@ Chỉ có luật Telex thì chưa đủ. Theo luật, `test` thành `tét` và `
 
 **3. Từ đứng trước quyết định ngôn ngữ cho các từ nhập nhằng.** Ankey nhớ từ gần nhất là tiếng Anh hay tiếng Việt. Trí nhớ này bị xoá khi gặp dấu chấm, `!`, `?`, Return, Tab, khi chuyển app, và khi con trỏ nhảy chỗ khác, vì lúc đó các từ gõ trước không còn liên quan tới từ sắp gõ. Từ dính liền với dấu câu của code (`my_var`, `user@host`, `foo.bar(x)`) giữ nguyên, trừ khi đứng sau một từ tiếng Việt, nên `ừm...tôi` vẫn chuyển bình thường.
 
-**4. Xoá cả từ rồi gõ lại đúng phím đó là lời sửa.** `sex` ra `sẽ`, bạn xoá cả từ rồi gõ lại `sex`: Ankey hiểu là chọn nhầm và từ đó giữ nguyên chữ đã gõ. Chiều ngược lại cũng vậy, `test` ép thành `tét`. Chỉ tính khi xoá hết từ và gõ lại đúng chuỗi phím, từ có từ ba chữ trở lên, và chỉ với từ nằm trong danh sách tiếng Anh có sẵn: `banj` hay `tooi` không phải từ tiếng Anh nên không bao giờ bị giữ nguyên chữ.
+**4. Xoá cả từ rồi gõ lại đúng phím đó là lời sửa.** `sex` ra `sẽ`, bạn xoá cả từ rồi gõ lại `sex`: Ankey hiểu là chọn nhầm, hiện `sex` ngay và nhớ từ đó khi bạn chốt từ. Chiều ngược lại cũng vậy, `test` ép thành `tét`. Chỉ tính khi xoá hết từ và gõ lại đúng chuỗi phím, từ có từ ba chữ trở lên, và chỉ với từ nằm trong danh sách tiếng Anh có sẵn: `banj` hay `tooi` không phải từ tiếng Anh nên không bao giờ bị giữ nguyên chữ. Sửa lỗi gõ (`sex` thành `sez`), gõ tiếp thành từ dài hơn (`sexy`) hay xoá nửa chừng không đổi gì. Từ đã học hiện ở thẻ Chung, bấm xoá là quên.
 
-Cách nhanh hơn: gõ `cos` ra `có`, bấm thêm một phím dấu nữa thì dấu bị huỷ và ra `cos`. Phím `s`, `f`, `r`, `x`, `j` làm vậy khi từ sau khi huỷ dấu là một từ tiếng Anh trong danh sách (`coss` ra `cos`, `sexx` ra `sex`). Từ khác giữ nguyên mọi phím đã gõ, nên `boss`, `pass`, `class`, `assertEqual` không bị đụng. Phím mũ như `oo`, `ee`, `w` thì luôn huỷ như vậy (`tooo` ra `too`). Sửa lỗi gõ (`sex` thành `sez`) hay xoá nửa chừng không đổi gì. Từ đã học hiện ở thẻ Chung, bấm xoá là quên.
+Ba lớp sau cùng là một điểm số cho mỗi từ: hạng có sẵn (0, 1, 2), cộng một khi từ trước là tiếng Anh, cộng điểm đã học từ lời sửa. Từ đạt 2 trở lên thì giữ nguyên chữ đã gõ. Lời sửa đẩy điểm tới đầu bên kia (+2 hoặc −2), nên từ đổi chiều sau mọi từ đứng trước.
 
-Ba lớp sau cùng là một điểm số cho mỗi từ: hạng có sẵn (0, 1, 2), cộng một khi từ trước là tiếng Anh, cộng điểm đã học từ lời sửa. Từ đạt 2 trở lên thì giữ nguyên chữ đã gõ. Lời sửa chỉ đẩy điểm vừa đủ để lần gõ lại đổi chiều.
+Gõ phím dấu hai lần (`coss`) không huỷ dấu để ra `cos`: tiếng Anh có nhiều từ kết thúc bằng hai chữ như vậy (`boss`, `pass`, `harass`) và Ankey giữ nguyên chúng. Muốn `cos`, bấm Esc khi đang hiện `có`, hoặc xoá cả từ rồi gõ lại. Phím mũ (`oo`, `ee`, `w`) gõ thêm một lần thì huỷ mũ (`tooo` ra `too`).
 
 Các danh sách có sẵn nằm trong code, không nằm trong settings đã lưu, để mỗi lần cập nhật đều tới được cả những người đã chỉnh settings riêng.
 
@@ -61,6 +61,7 @@ Engine không sửa chữ đang hiện trên màn hình. Nó giữ **các phím 
 - Backspace bỏ phím thô cuối rồi render lại.
 - `noww` ra `now` vì engine thấy đủ bốn phím, không phải một chữ `nô` đã chuyển dở.
 - Esc trả về phím thô. Nếu Ankey đã đổi `test` thành `tét`, một lần Esc cho lại `test`.
+- Shift+Esc đảo cách đọc của từ đang gõ và giữ từ mở: `test` giữ nguyên thì ra `tét`, `có` thì ra `cos`, bấm lần nữa để quay lại. Gõ thêm hoặc xoá một phím thì từ đọc lại từ đầu. Từ chỉ có một cách đọc (`hello`) không đổi. Shift+Esc không dạy Ankey gì; muốn Ankey nhớ thì xoá cả từ rồi gõ lại.
 
 Vì thấy cả từ nên phím dấu không cần đúng thứ tự. `vieetj` và `vietej` đều ra `việt`. `duwocj` và `duocwj` đều ra `dược`. Phím mũ có thể đến sau các nguyên âm theo sau (`vayaj` → `vậy`, `toio` → `tôi`) hoặc sau phụ âm cuối. Phím dấu thanh nằm ngay trước phím mũ thì phá cặp, nên `verse` và `reference` giữ nguyên mọi chữ.
 
@@ -68,7 +69,7 @@ Vì thấy cả từ nên phím dấu không cần đúng thứ tự. `vieetj` v
 
 Ankey không gửi gì đi, trừ khi bạn tự gửi góp ý (mục trên) hoặc bật trong Cài đặt → Thống kê. Thống kê có hai công tắc, cả hai mặc định tắt.
 
-- **Ghi thống kê trên máy.** Ankey đếm số lần: từ được đổi dấu, từ giữ nguyên, Esc trả lại chữ đã gõ, chèn trực tiếp bị lệch. Chỉ lưu trên máy, giữ 30 ngày. Tắt là xoá hết.
+- **Ghi thống kê trên máy.** Ankey đếm số lần: từ được đổi dấu, từ giữ nguyên, Esc trả lại chữ đã gõ, lần Shift+Esc đảo cách đọc (hai chiều), lần Ankey học lại một từ từ lời sửa (hai chiều), chèn trực tiếp bị lệch. Chỉ lưu trên máy, giữ 30 ngày. Tắt là xoá hết.
 - **Gửi thống kê tới Datadog.** Mỗi ngày gửi tối đa một lần, chỉ các ngày đã qua. Nút Sao chép trong tab Thống kê đưa đúng dữ liệu sẽ gửi vào clipboard.
 
 Không bao giờ lưu hay gửi chữ bạn gõ, phím bấm hay tên ứng dụng. Các trường được gửi nằm trong danh sách cố định ở `Tests/TestMain.swift`, thêm một trường mới thì test đỏ cho tới khi danh sách đổi theo.

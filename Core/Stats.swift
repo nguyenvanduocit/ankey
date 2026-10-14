@@ -10,6 +10,14 @@ enum StatsEvent: String, CaseIterable {
     case escRestoredRaw
     /// Direct insertion could not find its word and inserted at the wrong range.
     case directFallback
+    /// Erasing a word and typing it again made Ankey learn it as English.
+    case correctionToEnglish
+    /// Erasing a word and typing it again made Ankey learn it as Vietnamese.
+    case correctionToVietnamese
+    /// Shift+Esc showed the typed keys of a converted word.
+    case flipToEnglish
+    /// Shift+Esc showed the Vietnamese reading of a word that stayed as typed.
+    case flipToVietnamese
 }
 
 /// The counters of one day.

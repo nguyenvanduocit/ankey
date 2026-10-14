@@ -51,6 +51,14 @@ final class AnkeyInputController: IMKInputController {
             leaveWord(sender)
             return false
         }
+        // Option+Backspace deletes a word in the app. Ankey cannot count it, so it ends the word like Cmd does.
+        if event.keyCode == 51, event.modifierFlags.contains(.option) {
+            leaveWord(sender)
+            return false
+        }
+        if event.keyCode == Self.escapeKey, event.modifierFlags.contains(.shift), session.isComposing, !session.isHolding {
+            return swapWord(sender)
+        }
         if let selector = Self.commands[event.keyCode] {
             return didCommand(by: selector, client: sender)
         }
@@ -69,6 +77,7 @@ final class AnkeyInputController: IMKInputController {
         48: #selector(NSResponder.insertTab(_:)),
         53: #selector(NSResponder.cancelOperation(_:)),
     ]
+    private static let escapeKey: UInt16 = 53
 
     override func inputText(_ string: String!, client sender: Any!) -> Bool {
         let ctx = context(sender)
@@ -82,7 +91,7 @@ final class AnkeyInputController: IMKInputController {
         }
         switch session.push(ch) {
         case .consumed:
-            refresh(sender, learn(session.correction(ctx.settings), sender, ctx))
+            refresh(sender, ctx)
             return true
         case .pass:
             return false
@@ -140,11 +149,17 @@ final class AnkeyInputController: IMKInputController {
         return false
     }
 
-    /// A word that was erased and typed again takes the other language from now on. The next key reads it.
-    private func learn(_ correction: Correction?, _ sender: Any!, _ ctx: Context) -> Context {
-        guard let correction else { return ctx }
-        AdjustStore.shared.set(correction.word, to: correction.adjust)
-        return context(sender)
+    /// Shift+Esc shows the other reading of the word being typed and keeps it open: the Vietnamese text for a
+    /// word that stayed as typed, the typed keys for a converted one. Keys with one reading change nothing.
+    private func swapWord(_ sender: Any!) -> Bool {
+        let ctx = context(sender)
+        switch session.swap(ctx.settings) {
+        case .vietnamese: StatsStore.record(.flipToVietnamese)
+        case .english: StatsStore.record(.flipToEnglish)
+        case nil: break
+        }
+        refresh(sender, ctx)
+        return true
     }
 
     override func composedString(_ sender: Any!) -> Any! {
@@ -246,7 +261,11 @@ final class AnkeyInputController: IMKInputController {
 
     private func commit(_ sender: Any!, _ ctx: Context) {
         let raw = session.raw
-        let word = session.finish(ctx.settings)
+        let word = session.finish(ctx.settings, encode: ctx.encoding.convert)
+        if let correction = session.learned {
+            AdjustStore.shared.set(correction.word, to: correction.adjust)
+            StatsStore.record(correction.adjust > 0 ? .correctionToEnglish : .correctionToVietnamese)
+        }
         if let event = statsEvent(raw: raw, committed: word) { StatsStore.record(event) }
         finalize(word, sender, ctx)
     }

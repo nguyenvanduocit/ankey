@@ -446,170 +446,255 @@ func checkAdjustStore() {
     expect(AdjustStore(defaults: defaults).words, ["test": -2, "sex": 1], "save writes no adjustment")
 }
 
-/// Erasing a whole word and typing the same keys again says the engine chose the wrong language.
+/// Erasing a whole word and typing the same keys again says the engine chose the wrong language. The retype
+/// shows the other one at once, and the word learns it when it is committed.
 func checkCorrection() {
     let none = Settings()
-    func type(_ session: inout Session, _ keys: String, _ settings: Settings = Settings()) -> Correction? {
-        var found: Correction?
-        for ch in keys {
-            _ = session.push(ch)
-            if let correction = session.correction(settings) { found = correction }
-        }
-        return found
+    func type(_ session: inout Session, _ keys: String) {
+        for ch in keys { _ = session.push(ch) }
     }
     func erase(_ session: inout Session) {
         while session.pop() {}
     }
-
-    // Vietnamese was shown, so the retype turns English. `sex` has band 1, one step is enough.
-    var session = Session()
-    expect(type(&session, "sex"), nil, "the first typing is no correction")
-    expect(session.display(none), "s\u{1ebd}", "sex shows sẽ")
-    erase(&session)
-    expect(type(&session, "se"), nil, "no correction before the last key")
-    expect(type(&session, "x"), Correction(word: "sex", adjust: 1), "retyped sex")
-    var learned = none
-    learned.adjust = ["sex": 1]
-    expect(session.display(learned), "sex", "the retype shows English")
-    expect(type(&session, "y"), nil, "a correction fires once")
-
-    // English was shown, so the retype turns Vietnamese.
-    session = Session()
-    _ = type(&session, "test")
-    erase(&session)
-    expect(type(&session, "test"), Correction(word: "test", adjust: -1), "test turns Vietnamese")
-    // A word the lists know as English turns English even when Vietnamese wins by default.
-    session = Session()
-    _ = type(&session, "cos")
-    erase(&session)
-    expect(type(&session, "cos"), Correction(word: "cos", adjust: 2), "cos turns English")
-    // English needs evidence. A word the built-in lists do not know as English never turns English, so
-    // `banj` and `hocj` (no word of either language) keep their Vietnamese reading.
-    for word in ["banj", "hocj", "tooi"] {
-        session = Session()
-        _ = type(&session, word)
-        erase(&session)
-        expect(type(&session, word), nil, "\(word) has no English side")
-    }
-    session = Session()
-    _ = type(&session, "banj")
-    expect(session.display(none), "b\u{1ea1}n", "banj shows bạn")
-    erase(&session)
-    _ = type(&session, "banj")
-    expect(session.display(none), "b\u{1ea1}n", "banj shows bạn after the retype")
-    // An earlier correction is undone from the other side.
-    var taught = none
-    taught.adjust = ["sex": 1]
-    session = Session()
-    _ = type(&session, "sex", taught)
-    erase(&session)
-    expect(type(&session, "sex", taught), Correction(word: "sex", adjust: 0), "sex taught English, then turned back")
-    // Case does not matter.
-    session = Session()
-    _ = type(&session, "Sex")
-    erase(&session)
-    expect(type(&session, "sex"), Correction(word: "sex", adjust: 1), "case is ignored")
-
-    // Backspace has other uses: none of these is a correction.
-    session = Session()
-    _ = type(&session, "sex")
-    erase(&session)
-    expect(type(&session, "sez"), nil, "a typo fix is another word")
-    erase(&session)
-    expect(type(&session, "sex"), nil, "a departed word is forgotten")
-    session = Session()
-    _ = type(&session, "sex")
-    _ = session.pop()
-    expect(type(&session, "x"), nil, "a partial delete")
-    session = Session()
-    _ = type(&session, "sex")
-    erase(&session)
-    _ = session.push(" ")
-    expect(type(&session, "sex"), nil, "another key between")
-    session = Session()
-    _ = type(&session, "as")
-    erase(&session)
-    expect(type(&session, "as"), nil, "a Telex word of two letters")
-    session = Session()
-    _ = type(&session, "hello")
-    erase(&session)
-    expect(type(&session, "hello"), nil, "one text only, nothing to choose")
-    session = Session()
-    _ = type(&session, "sex")
-    session.clear()
-    expect(type(&session, "sex"), nil, "Esc is no erase")
-    var raw = none
-    raw.restoreRaw = false
-    session = Session()
-    _ = type(&session, "sex", raw)
-    erase(&session)
-    expect(type(&session, "sex", raw), nil, "raw restore off")
-
-    // A word the user committed and then deleted in the document.
-    func commit(_ session: inout Session, _ keys: String, boundary: Character = " ") -> String {
-        for ch in keys { _ = session.push(ch) }
-        precondition(session.push(boundary) == .commit)
-        return session.finish(none)
+    /// Commits with a space the way the controller does and reports what the word learned.
+    func commit(_ session: inout Session, _ settings: Settings = Settings(), encode: (String) -> String = { $0 }) -> (text: String, learned: Correction?) {
+        precondition(session.push(" ") == .commit)
+        let text = session.finish(settings, encode: encode)
+        return (text, session.learned)
     }
     func delete(_ session: inout Session, _ count: Int) {
         for _ in 0..<count { session.deleted() }
     }
+
+    // Vietnamese was shown, so the retype turns English, and nothing changes before the last key.
+    var session = Session()
+    type(&session, "sex")
+    expect(session.display(none), "s\u{1ebd}", "sex shows sẽ")
+    expect(commit(&session).learned, nil, "the first typing learns nothing")
     session = Session()
-    var text = commit(&session, "sex")
+    type(&session, "sex")
+    erase(&session)
+    type(&session, "se")
+    expect(session.display(none), "se", "no flip before the last key")
+    type(&session, "x")
+    expect(session.display(none), "sex", "the retype shows English at once")
+    let done = commit(&session)
+    expect(done.text, "sex", "committed as typed")
+    expect(done.learned, Correction(word: "sex", adjust: 2), "sex learned")
+    expect(session.display(none), "", "nothing left")
+    // English was shown, so the retype turns Vietnamese.
+    session = Session()
+    type(&session, "test")
+    erase(&session)
+    type(&session, "test")
+    expect(session.display(none), "t\u{00e9}t", "test turns Vietnamese")
+    expect(commit(&session).learned, Correction(word: "test", adjust: -2), "test learned")
+    // A word Vietnamese wins by default is a known English word too.
+    session = Session()
+    type(&session, "cos")
+    erase(&session)
+    type(&session, "cos")
+    expect(commit(&session).learned, Correction(word: "cos", adjust: 2), "cos learned")
+    // A correction is undone from the other side, whatever the word before it.
+    var taught = none
+    taught.adjust = ["cos": 2]
+    session = Session()
+    type(&session, "cos")
+    erase(&session)
+    type(&session, "cos")
+    expect(session.display(taught), "c\u{00f3}", "cos taught English turns back")
+    expect(commit(&session, taught).learned, Correction(word: "cos", adjust: -2), "cos turned back")
+    taught.adjust = ["cos": -2]
+    expect(Engine.render("cos", taught, after: .english), "c\u{00f3}", "cos turned back after English too")
+    // Case does not matter.
+    session = Session()
+    type(&session, "Sex")
+    erase(&session)
+    type(&session, "sex")
+    expect(commit(&session).learned, Correction(word: "sex", adjust: 2), "case is ignored")
+
+    // Backspace has other uses: none of these learns anything.
+    session = Session()
+    type(&session, "test")
+    erase(&session)
+    type(&session, "testing")
+    expect(session.display(none), "testing", "a longer word is another word")
+    expect(commit(&session).learned, nil, "testing learns nothing")
+    session = Session()
+    type(&session, "sex")
+    erase(&session)
+    type(&session, "sez")
+    expect(commit(&session).learned, nil, "a typo fix is another word")
+    session = Session()
+    type(&session, "sex")
+    erase(&session)
+    type(&session, "sez")
+    erase(&session)
+    type(&session, "sex")
+    expect(commit(&session).learned, nil, "a departed word is forgotten")
+    session = Session()
+    type(&session, "sex")
+    erase(&session)
+    type(&session, "sez")
+    _ = session.pop()
+    type(&session, "x")
+    expect(commit(&session).learned, nil, "a word that left the erased keys stays gone")
+    session = Session()
+    type(&session, "sex")
+    _ = session.pop()
+    type(&session, "x")
+    expect(commit(&session).learned, nil, "a partial delete")
+    session = Session()
+    type(&session, "sex")
+    erase(&session)
+    _ = session.push(" ")
+    type(&session, "sex")
+    expect(commit(&session).learned, nil, "another key between")
+    session = Session()
+    type(&session, "as")
+    erase(&session)
+    type(&session, "as")
+    expect(commit(&session).learned, nil, "a Telex word of two letters")
+    session = Session()
+    type(&session, "hello")
+    erase(&session)
+    type(&session, "hello")
+    expect(commit(&session).learned, nil, "one text only, nothing to choose")
+    session = Session()
+    type(&session, "sex")
+    session.clear()
+    type(&session, "sex")
+    expect(commit(&session).learned, nil, "Esc is no erase")
+    session = Session()
+    type(&session, "sex")
+    erase(&session)
+    type(&session, "sex")
+    _ = session.finishRaw()
+    expect(session.learned, nil, "Esc after the retype learns nothing")
+    var raw = none
+    raw.restoreRaw = false
+    session = Session()
+    type(&session, "sex")
+    erase(&session)
+    type(&session, "sex")
+    expect(commit(&session, raw).learned, nil, "raw restore off")
+    // English needs evidence: a word the lists do not know as English never learns it.
+    for word in ["banj", "hocj", "tooi"] {
+        session = Session()
+        type(&session, word)
+        erase(&session)
+        type(&session, word)
+        expect(session.display(none), Engine.render(word), "\(word) keeps its reading")
+        expect(commit(&session).learned, nil, "\(word) has no English side")
+    }
+
+    // A word the user committed and then deleted in the document.
+    func committed(_ session: inout Session, _ keys: String, encode: (String) -> String = { $0 }) -> String {
+        type(&session, keys)
+        return commit(&session, encode: encode).text
+    }
+    session = Session()
+    var text = committed(&session, "sex")
     expect(text, "s\u{1ebd}", "committed as sẽ")
     delete(&session, text.count + 1)
-    expect(type(&session, "sex"), Correction(word: "sex", adjust: 1), "retyped after the commit")
+    type(&session, "sex")
+    expect(session.display(none), "sex", "retyped after the commit")
+    expect(commit(&session).learned, Correction(word: "sex", adjust: 2), "learned after the commit")
     session = Session()
-    text = commit(&session, "sex")
+    text = committed(&session, "sex")
     delete(&session, text.count)
-    expect(type(&session, "sex"), nil, "the boundary key is still there")
+    type(&session, "sex")
+    expect(commit(&session).learned, nil, "the boundary key is still there")
     session = Session()
-    text = commit(&session, "sex")
+    text = committed(&session, "sex")
     delete(&session, text.count + 2)
-    expect(type(&session, "sex"), nil, "one delete too many")
+    type(&session, "sex")
+    expect(commit(&session).learned, nil, "one delete too many")
     session = Session()
-    text = commit(&session, "sex")
+    text = committed(&session, "sex")
     delete(&session, 1)
     _ = session.push("a")
     delete(&session, text.count)
-    expect(type(&session, "sex"), nil, "typing in between")
+    type(&session, "sex")
+    expect(commit(&session).learned, nil, "typing in between")
     session = Session()
-    text = commit(&session, "sex")
+    text = committed(&session, "sex")
     delete(&session, text.count + 1)
     session.forgetContext()
-    expect(type(&session, "sex"), nil, "the caret moved")
-    // The erased word does not count as the word before it.
+    type(&session, "sex")
+    expect(commit(&session).learned, nil, "the caret moved")
+    // The document holds the encoded word, so the encoded length is what backspace takes out.
+    let doubled: (String) -> String = { String($0.flatMap { [$0, "~"] }) }
     session = Session()
-    _ = commit(&session, "xinf")
-    text = commit(&session, "test")
+    text = committed(&session, "sex", encode: doubled)
     delete(&session, text.count + 1)
-    expect(type(&session, "test"), Correction(word: "test", adjust: -1), "context from before the erased word")
+    type(&session, "sex")
+    expect(commit(&session).learned, nil, "the encoded word is longer")
+    session = Session()
+    text = committed(&session, "sex", encode: doubled)
+    delete(&session, doubled(text).count + 1)
+    type(&session, "sex")
+    expect(commit(&session).learned, Correction(word: "sex", adjust: 2), "the encoded length")
 }
 
-/// A tone key typed twice undoes the tone. When the undone text is a word the lists know as English, that is
-/// what the user reached for (`coss` is `cos`). Any other word keeps every key it was typed with.
-func checkToneUndo() {
-    for (typed, want) in [
-        ("coss", "cos"), ("noss", "nos"), ("giff", "gif"), ("sexx", "sex"), ("boxx", "box"),
-        ("Coss", "Cos"), ("COSS", "COS"),
-    ] { check(typed, want) }
-    expect(Engine.render("coss", Settings(), after: .vietnamese), "cos", "coss after Vietnamese")
-    // The letters after the undo key continue the word.
-    check("cosst", "cost")
-    // English words that need both keys stay whole, and so does any word the lists do not know.
+/// A tone key typed twice undoes the tone. The keys stay whole unless the undone text is a syllable, so English
+/// words with a double letter are never cut. A mark key typed again drops the extra key.
+func checkSwap() {
+    let none = Settings()
+    func typed(_ keys: String) -> Session {
+        var session = Session()
+        for ch in keys { _ = session.push(ch) }
+        return session
+    }
+
+    // A word that stayed as typed shows its Vietnamese reading, and a second swap goes back.
+    var session = typed("test")
+    expect(session.display(none), "test", "test stays as typed")
+    expect(session.swap(none), .vietnamese, "swap names the language now shown")
+    expect(session.display(none), "t\u{e9}t", "swap shows tét")
+    expect(session.swap(none), .english, "swap again names English")
+    expect(session.display(none), "test", "swap again goes back")
+
+    // A converted word shows its typed keys.
+    session = typed("cos")
+    expect(session.display(none), "c\u{f3}", "cos shows có")
+    expect(session.swap(none), .english, "swap turns có into the typed keys")
+    expect(session.display(none), "cos", "swap shows cos")
+
+    // Keys with one reading change nothing, and a second swap does not remember the first.
+    session = typed("hello")
+    expect(session.swap(none), nil, "hello has one reading")
+    expect(session.display(none), "hello", "hello stays")
+    session = Session()
+    expect(session.swap(none), nil, "nothing typed, nothing to swap")
+
+    // Any change to the keys takes the swap back.
+    session = typed("test")
+    _ = session.swap(none)
+    _ = session.push("s")
+    expect(session.display(none), Engine.render("tests", none), "a key after the swap reads the word afresh")
+    session = typed("test")
+    _ = session.swap(none)
+    _ = session.pop()
+    expect(session.display(none), Engine.render("tes", none), "backspace after the swap reads the word afresh")
+
+    // The committed text is the swapped one, and the next word follows its language.
+    session = typed("test")
+    _ = session.swap(none)
+    expect(session.push(" "), .commit, "space commits the swapped word")
+    expect(session.finish(none), "t\u{e9}t", "the swapped text is committed")
+    expect(session.learned, nil, "a swap learns nothing")
+    for ch in "own" { _ = session.push(ch) }
+    expect(session.display(none), "\u{1a1}n", "the next word follows Vietnamese")
+}
+
+func checkDoubledKey() {
     for word in [
-        "boss", "pass", "class", "mass", "less", "loss", "miss", "off", "carry", "marry", "buff", "ass",
-        "address", "assert", "assertEqual", "assist", "error", "staff", "success", "process", "message", "coffee",
-        "banjj", "hocjj",
+        "coss", "sexx", "boss", "pass", "class", "mass", "less", "loss", "miss", "off", "carry", "marry", "buff", "ass",
+        "harass", "hiss", "lass", "iff", "taxx", "address", "assert", "assertEqual", "assist", "error", "staff",
+        "success", "process", "message", "coffee", "banjj", "hocjj",
     ] { check(word, word) }
-    // Marks undo the same way.
     for (typed, want) in [("tooo", "too"), ("seee", "see"), ("saww", "saw")] { check(typed, want) }
-    // The word counts as English afterwards.
-    var session = Session()
-    for ch in "coss" { _ = session.push(ch) }
-    expect(session.finish(Settings()), "cos", "committed as cos")
-    for ch in "as" { _ = session.push(ch) }
-    expect(session.display(Settings()), "as", "as after English")
 }
 
 func checkContext() {
@@ -864,6 +949,7 @@ func checkStats() {
     expect(Set(events[0].attributes.keys), [
         "appVersion", "macOS", "toneStyle", "encoding", "appRuleCount", "day", "installID",
         "wordChanged", "wordKept", "escRestoredRaw", "directFallback",
+        "correctionToEnglish", "correctionToVietnamese", "flipToEnglish", "flipToVietnamese",
     ], "payload attributes are the allowlist")
     let strings = events[0].attributes.values.compactMap { value -> String? in
         if case .string(let text) = value { return text }
@@ -1033,7 +1119,8 @@ struct TestRunner {
         checkScore()
         checkAdjustStore()
         checkCorrection()
-        checkToneUndo()
+        checkSwap()
+        checkDoubledKey()
         checkLateCircumflex()
         checkCodeContext()
         checkRawRestore()

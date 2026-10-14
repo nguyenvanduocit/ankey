@@ -7,11 +7,9 @@ import Foundation
 /// itself: `aj` is `ạ`, `oo` is `ô`. Each word falls in a band by how common its converted form is in
 /// Vietnamese, ranked by hermitdave/FrequencyWords (vi, 2018):
 ///   - under 500: `known`, the Vietnamese word wins by default (`cos` is `có`, `nos` is `nó`). The word is still
-///     known as English, so a doubled tone key (`coss`) or a correction can turn it English;
+///     known as English, so a correction can turn it English;
 ///   - 500 to 8000: `context`, English only right after an English word (`last` is `lát`, `chaos` is `cháo`);
 ///   - 8000 and up, or not ranked: `always`, English everywhere (`reset` is not `rết`).
-/// `always` also holds the English words whose doubled tone key reads as a listed word (`pass` is `pas`,
-/// `off` is `of`): the 28 words of the 20k list where that happens, so `Engine.analyze` keeps their keys.
 /// Placed by hand: `test`, `list`, `box`, `asap` and the short words people used to list themselves go to
 /// `always`, and `as`, `car`, `too`, `own`, `var`, `max`, `ref`, `docs` and the rest of the old pairs stay in `context`.
 /// The built-in list lives in code, not in `UserDefaults`, so an update reaches users who already saved settings.
@@ -19,6 +17,8 @@ enum English {
     /// Typed keys, lowercase.
     static let always: Set<String> = Set(alwaysSource.split(whereSeparator: \.isWhitespace).map(String.init))
     static let context: Set<String> = Set(contextSource.split(whereSeparator: \.isWhitespace).map(String.init))
+    /// The word is one the lists know as English, even when Vietnamese wins it by default (`cos`).
+    static func knows(_ word: String) -> Bool { band[word] != nil }
     static let known: Set<String> = Set(knownSource.split(whereSeparator: \.isWhitespace).map(String.init))
     /// The built-in score of every word the lists know as English: 2 for `always`, 1 for `context`, 0 for
     /// `known`. A word that is not here has no English side.

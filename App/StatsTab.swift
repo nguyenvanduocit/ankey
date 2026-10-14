@@ -21,7 +21,7 @@ struct StatsTab: View {
             ) {
                 PixelToggle(
                     title: "Ghi thống kê trên máy",
-                    detail: "Đếm số từ được đổi dấu, số từ giữ nguyên, số lần Esc trả lại chữ đã gõ và số lần chèn trực tiếp bị lệch. Chỉ lưu trên máy này.",
+                    detail: "Đếm số từ được đổi dấu, số từ giữ nguyên, số lần Esc trả lại chữ đã gõ, số lần Shift+Esc đảo cách đọc, số lần Ankey học lại một từ từ lời sửa và số lần chèn trực tiếp bị lệch. Chỉ lưu trên máy này.",
                     isOn: $model.value.collectStats
                 )
             }

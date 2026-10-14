@@ -178,7 +178,7 @@ struct HelpView: View {
          "Ankey chỉ đổi khi kết quả là một âm tiết tiếng Việt có thật, và đã có sẵn hơn 200 từ tiếng Anh hay gặp như reset, test. Từ nào vẫn đổi nhầm thì xoá cả từ rồi gõ lại đúng phím đó: Ankey nhớ và để từ ấy nguyên chữ đã gõ. Xem và xoá các từ đã nhớ ở thẻ Chung."),
         // InputController cancelOperation; Settings → Chung → Esc huỷ từ đang gõ.
         ("Ankey đổi nhầm, lấy lại chữ đã gõ thế nào?",
-         "Bấm Esc ngay: chữ trở về đúng phím đã gõ, tét thành test. Từ chưa ghép dấu thì Esc xoá hoặc chốt từ, chọn ở thẻ Chung → Esc huỷ từ đang gõ."),
+         "Bấm Esc ngay: chữ trở về đúng phím đã gõ, tét thành test. Từ chưa ghép dấu thì Esc xoá hoặc chốt từ, chọn ở thẻ Chung → Esc huỷ từ đang gõ. Ankey giữ nguyên một từ mà bạn muốn đổi dấu (test thành tét) thì bấm Shift+Esc, bấm lần nữa để quay lại."),
         // Settings → Ứng dụng: footer and the help on the mode choice.
         ("Tắt, Gạch chân, Trực tiếp khác nhau thế nào?",
          "Chọn ở thẻ Ứng dụng → Thêm ứng dụng…. Tắt: Ankey không gõ ở đó. Gạch chân (mặc định): chữ gạch chân tới khi chốt. Trực tiếp: Cmd+A thấy đủ chữ, một số ứng dụng không hỗ trợ."),

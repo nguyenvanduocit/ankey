@@ -8,7 +8,7 @@ final class AdjustStore: @unchecked Sendable {
     static let shared = AdjustStore(defaults: .standard)
 
     /// A correction moves a word as far as the built-in bands go, no further.
-    static let range = -2...2
+    static let range = -Engine.adjustLimit...Engine.adjustLimit
 
     private static let key = "wordAdjust"
 
@@ -42,7 +42,7 @@ final class AdjustStore: @unchecked Sendable {
         for (word, value) in rows {
             let key = word.trimmingCharacters(in: .whitespaces).lowercased()
             let score = min(max(value, range.lowerBound), range.upperBound)
-            if English.band[key] != nil, score != 0 { result[key] = score }
+            if English.knows(key), score != 0 { result[key] = score }
         }
         return result
     }
