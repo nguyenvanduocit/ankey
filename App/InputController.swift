@@ -5,6 +5,19 @@ import InputMethodKit
 final class AnkeyInputController: IMKInputController {
     private var session = Session()
     private let anywhere = NSRange(location: NSNotFound, length: NSNotFound)
+    /// Direct insertion only: the word as it sits in the document right now.
+    private var shown = ""
+
+    private struct Context {
+        let settings: Settings
+        let rule: AppRule
+    }
+
+    private func context(_ sender: Any!) -> Context {
+        let stored = Settings.load()
+        let rule = stored.rule(for: textClient(sender)?.bundleIdentifier())
+        return Context(settings: stored.applying(rule), rule: rule)
+    }
 
     // Overriding handle makes it the only entry point: IMK stops calling inputText and
     // didCommand itself. Route every key here.
@@ -21,11 +34,11 @@ final class AnkeyInputController: IMKInputController {
         switch event.type {
         case .flagsChanged:
             if !event.modifierFlags.isDisjoint(with: [.command, .control]) {
-                commit(sender, Settings.load(), expand: false)
+                commit(sender, context(sender), expand: false)
             }
             return false
         case .leftMouseDown, .rightMouseDown, .otherMouseDown:
-            commit(sender, Settings.load(), expand: false)
+            commit(sender, context(sender), expand: false)
             return false
         case .keyDown:
             break
@@ -33,7 +46,7 @@ final class AnkeyInputController: IMKInputController {
             return false
         }
         if !event.modifierFlags.isDisjoint(with: [.command, .control]) {
-            commit(sender, Settings.load(), expand: false)
+            commit(sender, context(sender), expand: false)
             return false
         }
         if let selector = Self.commands[event.keyCode] {
@@ -43,7 +56,7 @@ final class AnkeyInputController: IMKInputController {
            !(0xF700...0xF8FF).contains(scalar.value) {
             return inputText(text, client: sender)
         }
-        commit(sender, Settings.load(), expand: false)
+        commit(sender, context(sender), expand: false)
         return false
     }
 
@@ -56,65 +69,66 @@ final class AnkeyInputController: IMKInputController {
     ]
 
     override func inputText(_ string: String!, client sender: Any!) -> Bool {
-        let settings = Settings.load()
-        if settings.isExcluded(bundleID: textClient(sender)?.bundleIdentifier()) {
-            commit(sender, settings, expand: false)
+        let ctx = context(sender)
+        if !ctx.rule.enabled {
+            commit(sender, ctx, expand: false)
             return false
         }
         guard let string, string.count == 1, let ch = string.first else {
-            commit(sender, settings, expand: false)
+            commit(sender, ctx, expand: false)
             return false
         }
         switch session.push(ch) {
         case .consumed:
-            refresh(sender, settings)
+            refresh(sender, ctx)
             return true
         case .pass:
             return false
         case .commit:
-            commit(sender, settings, expand: true)
+            commit(sender, ctx, expand: true)
             return false
         }
     }
 
     override func didCommand(by selector: Selector!, client sender: Any!) -> Bool {
         let name = selector.map(NSStringFromSelector) ?? ""
-        let settings = Settings.load()
+        let ctx = context(sender)
         if name == "deleteBackward:" {
             guard session.pop() else { return false }
-            refresh(sender, settings)
+            refresh(sender, ctx)
             return true
         }
         if name == "cancelOperation:" {
             guard session.isComposing else { return false }
-            if session.display(settings) != session.raw {
-                insert(session.finishRaw(), sender)
+            if session.display(ctx.settings) != session.raw {
+                finalize(session.finishRaw(), sender, ctx)
                 return true
             }
-            guard settings.escClears else {
-                commit(sender, settings, expand: false)
+            guard ctx.settings.escClears else {
+                commit(sender, ctx, expand: false)
                 return false
             }
             session.clear()
-            refresh(sender, settings)
+            refresh(sender, ctx)
             return true
         }
         let endsLine = name == "insertNewline:" || name == "insertTab:"
-        if session.isComposing { commit(sender, settings, expand: endsLine) }
+        if session.isComposing { commit(sender, ctx, expand: endsLine) }
         if endsLine { session.forgetContext() }
         return false
     }
 
     override func composedString(_ sender: Any!) -> Any! {
-        session.display(Settings.load()) as NSString
+        let ctx = context(sender)
+        return (ctx.rule.insertion == .direct ? "" : session.display(ctx.settings)) as NSString
     }
 
     override func commitComposition(_ sender: Any!) {
-        commit(sender, Settings.load(), expand: false)
+        commit(sender, context(sender), expand: false)
     }
 
     override func deactivateServer(_ sender: Any!) {
-        commit(sender, Settings.load(), expand: false)
+        commit(sender, context(sender), expand: false)
         session.forgetContext()
     }
 
@@ -195,31 +209,46 @@ final class AnkeyInputController: IMKInputController {
         alert.runModal()
     }
 
-    private func commit(_ sender: Any!, _ settings: Settings, expand: Bool) {
-        insert(session.finish(settings, expand: expand), sender)
+    private func commit(_ sender: Any!, _ ctx: Context, expand: Bool) {
+        finalize(session.finish(ctx.settings, expand: expand), sender, ctx)
     }
 
-    private func insert(_ text: String, _ sender: Any!) {
+    /// Puts the finished word in the document and leaves nothing pending.
+    private func finalize(_ text: String, _ sender: Any!, _ ctx: Context) {
+        if ctx.rule.insertion == .direct {
+            replaceShown(with: text, sender)
+            shown = ""
+            return
+        }
         guard !text.isEmpty, let client = textClient(sender) else { return }
         client.insertText(text, replacementRange: anywhere)
     }
 
-    private func refresh(_ sender: Any!, _ settings: Settings) {
-        guard let client = textClient(sender) else { return }
-        let text = session.display(settings)
-        if text.isEmpty {
-            client.setMarkedText(
-                "",
-                selectionRange: NSRange(location: 0, length: 0),
-                replacementRange: anywhere
-            )
+    private func refresh(_ sender: Any!, _ ctx: Context) {
+        let text = session.display(ctx.settings)
+        if ctx.rule.insertion == .direct {
+            replaceShown(with: text, sender)
             return
         }
+        guard let client = textClient(sender) else { return }
         client.setMarkedText(
             text,
             selectionRange: NSRange(location: text.utf16.count, length: 0),
             replacementRange: anywhere
         )
+    }
+
+    /// The caret sits at the end of the shown word, so the word's range is the text just before it.
+    private func replaceShown(with text: String, _ sender: Any!) {
+        guard text != shown, let client = textClient(sender) else { return }
+        let length = shown.utf16.count
+        let caret = client.selectedRange().location
+        if length == 0 || caret == NSNotFound || caret < length {
+            client.insertText(text, replacementRange: anywhere)
+        } else {
+            client.insertText(text, replacementRange: NSRange(location: caret - length, length: length))
+        }
+        shown = text
     }
 
     private func textClient(_ sender: Any!) -> (any IMKTextInput)? {

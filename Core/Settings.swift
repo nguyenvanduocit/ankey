@@ -57,6 +57,59 @@ extension Macro {
     }
 }
 
+enum Insertion: String {
+    /// The word being typed is underlined marked text that the app holds until commit.
+    case marked
+    /// The word is plain text that each key replaces. Nothing is pending, so shortcuts see all of it.
+    case direct
+}
+
+/// How Ankey behaves in one app. `nil` fields follow the General tab.
+struct AppRule: Equatable {
+    var bundleID: String
+    var enabled = true
+    var insertion = Insertion.marked
+    var restoreRaw: Bool?
+    var escClears: Bool?
+
+    /// Trimmed IDs, empty ones dropped, first rule of an ID wins.
+    static func cleaned(_ rules: [AppRule]) -> [AppRule] {
+        var seen = Set<String>()
+        var result: [AppRule] = []
+        for var rule in rules {
+            rule.bundleID = rule.bundleID.trimmingCharacters(in: .whitespaces)
+            if !rule.bundleID.isEmpty, seen.insert(rule.bundleID).inserted { result.append(rule) }
+        }
+        return result
+    }
+
+    init(bundleID: String, enabled: Bool = true, insertion: Insertion = .marked, restoreRaw: Bool? = nil, escClears: Bool? = nil) {
+        self.bundleID = bundleID
+        self.enabled = enabled
+        self.insertion = insertion
+        self.restoreRaw = restoreRaw
+        self.escClears = escClears
+    }
+
+    init?(stored row: [String: Any]) {
+        guard let bundleID = row["bundleID"] as? String else { return nil }
+        self.init(
+            bundleID: bundleID,
+            enabled: row["enabled"] as? Bool ?? true,
+            insertion: (row["insertion"] as? String).flatMap(Insertion.init(rawValue:)) ?? .marked,
+            restoreRaw: row["restoreRaw"] as? Bool,
+            escClears: row["escClears"] as? Bool
+        )
+    }
+
+    var stored: [String: Any] {
+        var row: [String: Any] = ["bundleID": bundleID, "enabled": enabled, "insertion": insertion.rawValue]
+        if let restoreRaw { row["restoreRaw"] = restoreRaw }
+        if let escClears { row["escClears"] = escClears }
+        return row
+    }
+}
+
 struct Settings: Equatable {
     var toneStyle = ToneStyle.modern
     var restoreRaw = true
@@ -70,7 +123,7 @@ struct Settings: Equatable {
         "list", "lists", "most", "best", "test", "tests", "cost", "costs", "rest", "host", "hosts", "six",
         "mix", "box",
     ]
-    var excludedApps: [String] = []
+    var appRules: [AppRule] = []
 }
 
 extension Settings {
@@ -82,13 +135,21 @@ extension Settings {
         static let macros = "macros"
         static let shorthand = "shorthand"
         static let keepEnglish = "keepEnglish"
+        static let appRules = "appRules"
         static let excludedApps = "excludedApps"
     }
 
-    /// An unknown client, or one without a bundle ID, is never excluded.
-    func isExcluded(bundleID: String?) -> Bool {
-        guard let bundleID, !bundleID.isEmpty else { return false }
-        return excludedApps.contains(bundleID)
+    /// The rule for an app. An unknown client, or one without a bundle ID, gets the default rule.
+    func rule(for bundleID: String?) -> AppRule {
+        appRules.first { $0.bundleID == bundleID } ?? AppRule(bundleID: bundleID ?? "")
+    }
+
+    /// The settings with the rule's overrides applied.
+    func applying(_ rule: AppRule) -> Settings {
+        var settings = self
+        settings.restoreRaw = rule.restoreRaw ?? restoreRaw
+        settings.escClears = rule.escClears ?? escClears
+        return settings
     }
 
     /// A key that was never saved, or holds the wrong type, keeps its default.
@@ -113,8 +174,11 @@ extension Settings {
         if let words = defaults.stringArray(forKey: Key.keepEnglish) {
             settings.keepEnglish = uniqueTrimmed(words, lowercased: true)
         }
-        if let apps = defaults.stringArray(forKey: Key.excludedApps) {
-            settings.excludedApps = uniqueTrimmed(apps, lowercased: false)
+        if let rows = defaults.array(forKey: Key.appRules) as? [[String: Any]] {
+            settings.appRules = AppRule.cleaned(rows.compactMap(AppRule.init(stored:)))
+        } else if let apps = defaults.stringArray(forKey: Key.excludedApps) {
+            // Apps excluded before per-app rules existed keep Ankey off.
+            settings.appRules = AppRule.cleaned(apps.map { AppRule(bundleID: $0, enabled: false) })
         }
         return settings
     }
@@ -127,7 +191,8 @@ extension Settings {
         defaults.set(macros.map { ["shortcut": $0.shortcut, "text": $0.text] }, forKey: Key.macros)
         defaults.set(shorthand, forKey: Key.shorthand)
         defaults.set(keepEnglish, forKey: Key.keepEnglish)
-        defaults.set(excludedApps, forKey: Key.excludedApps)
+        defaults.set(appRules.map(\.stored), forKey: Key.appRules)
+        defaults.removeObject(forKey: Key.excludedApps)
     }
 
     private static func uniqueTrimmed(_ items: [String], lowercased: Bool) -> [String] {

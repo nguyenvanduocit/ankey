@@ -138,7 +138,7 @@ func checkMacroStorage() {
     // Never saved: defaults.
     expect(Settings.load(from: defaults).macros, [], "macros default")
     expect(Settings.load(from: defaults).shorthand, ["\u{0111}c"], "shorthand default")
-    expect(Settings.load(from: defaults).excludedApps, [], "excludedApps default")
+    expect(Settings.load(from: defaults).appRules, [], "appRules default")
 
     // Round trip.
     var settings = Settings()
@@ -147,7 +147,10 @@ func checkMacroStorage() {
         Macro(shortcut: "ko", text: "kh\u{00f4}ng"),
     ]
     settings.shorthand = ["\u{0111}t"]
-    settings.excludedApps = ["com.apple.Terminal"]
+    settings.appRules = [
+        AppRule(bundleID: "com.apple.Terminal", enabled: false),
+        AppRule(bundleID: "com.tdesktop.Telegram", insertion: .direct, restoreRaw: false, escClears: true),
+    ]
     settings.save(to: defaults)
     expect(Settings.load(from: defaults), settings, "round trip")
 
@@ -171,23 +174,38 @@ func checkMacroStorage() {
 
     // Shorthand and apps: trim, shorthand lowercased, empty and duplicate entries dropped.
     settings.shorthand = [" \u{0110}T ", "", "\u{0111}t", "ab"]
-    settings.excludedApps = [" com.apple.Terminal ", "", "com.apple.Terminal", "com.googlecode.iterm2"]
+    settings.appRules = [
+        AppRule(bundleID: " com.apple.Terminal ", enabled: false),
+        AppRule(bundleID: ""),
+        AppRule(bundleID: "com.apple.Terminal", insertion: .direct),
+        AppRule(bundleID: "com.googlecode.iterm2"),
+    ]
     settings.save(to: defaults)
     expect(Settings.load(from: defaults).shorthand, ["\u{0111}t", "ab"], "shorthand cleanup")
     expect(
-        Settings.load(from: defaults).excludedApps,
-        ["com.apple.Terminal", "com.googlecode.iterm2"],
-        "excludedApps cleanup"
+        Settings.load(from: defaults).appRules,
+        [AppRule(bundleID: "com.apple.Terminal", enabled: false), AppRule(bundleID: "com.googlecode.iterm2")],
+        "appRules cleanup"
     )
 
     // Wrong stored types fall back to the field default.
     defaults.set("oops", forKey: "macros")
     defaults.set(5, forKey: "shorthand")
-    defaults.set("x", forKey: "excludedApps")
+    defaults.set("x", forKey: "appRules")
     let fallback = Settings.load(from: defaults)
     expect(fallback.macros, [], "macros wrong type")
     expect(fallback.shorthand, ["\u{0111}c"], "shorthand wrong type")
-    expect(fallback.excludedApps, [], "excludedApps wrong type")
+    expect(fallback.appRules, [], "appRules wrong type")
+
+    // Apps excluded before per-app rules existed stay off, and saving drops the old key.
+    let legacy = UserDefaults(suiteName: suite + ".legacy")!
+    defer { legacy.removePersistentDomain(forName: suite + ".legacy") }
+    legacy.set(["com.apple.Terminal"], forKey: "excludedApps")
+    let migrated = Settings.load(from: legacy)
+    expect(migrated.appRules, [AppRule(bundleID: "com.apple.Terminal", enabled: false)], "excludedApps migrates")
+    migrated.save(to: legacy)
+    expect(legacy.object(forKey: "excludedApps") == nil, true, "old key removed on save")
+    expect(Settings.load(from: legacy), migrated, "migrated rules persist")
 
     // A user who removed every shorthand word keeps an empty list.
     var emptied = Settings()
@@ -210,14 +228,25 @@ func checkMacroProblems() {
     expect(problems[digit.id], .badShortcut, "digit shortcut")
 }
 
-func checkExclusion() {
+func checkAppRules() {
     var settings = Settings()
-    settings.excludedApps = ["com.apple.Terminal"]
-    expect(settings.isExcluded(bundleID: "com.apple.Terminal"), true, "excluded match")
-    expect(settings.isExcluded(bundleID: "com.apple.TextEdit"), false, "not excluded")
-    expect(settings.isExcluded(bundleID: nil), false, "nil bundle id")
-    expect(settings.isExcluded(bundleID: ""), false, "empty bundle id")
-    expect(Settings().isExcluded(bundleID: "com.apple.Terminal"), false, "empty list excludes nothing")
+    settings.appRules = [
+        AppRule(bundleID: "com.apple.Terminal", enabled: false),
+        AppRule(bundleID: "com.tdesktop.Telegram", insertion: .direct, restoreRaw: false),
+    ]
+    expect(settings.rule(for: "com.apple.Terminal").enabled, false, "rule off")
+    expect(settings.rule(for: "com.tdesktop.Telegram").insertion, .direct, "rule direct")
+    expect(settings.rule(for: "com.apple.TextEdit"), AppRule(bundleID: "com.apple.TextEdit"), "unknown app gets the default rule")
+    expect(settings.rule(for: nil), AppRule(bundleID: ""), "nil bundle id")
+    expect(settings.rule(for: "").enabled, true, "empty bundle id stays on")
+    expect(Settings().rule(for: "com.apple.Terminal").enabled, true, "no rules switch nothing off")
+
+    // Overrides replace the General value. nil follows it.
+    expect(settings.restoreRaw, true, "General restoreRaw")
+    expect(settings.applying(settings.rule(for: "com.tdesktop.Telegram")).restoreRaw, false, "restoreRaw override")
+    expect(settings.applying(settings.rule(for: "com.tdesktop.Telegram")).escClears, true, "escClears follows General")
+    settings.escClears = false
+    expect(settings.applying(settings.rule(for: "com.tdesktop.Telegram")).escClears, false, "escClears follows a changed General")
 }
 
 func checkRelease() {
@@ -546,7 +575,7 @@ struct TestRunner {
         checkSettings()
         checkMacroStorage()
         checkMacroProblems()
-        checkExclusion()
+        checkAppRules()
         checkRelease()
         checkLoadTiming()
         checkExpansion()

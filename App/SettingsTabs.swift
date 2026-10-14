@@ -219,17 +219,17 @@ struct AppsTab: View {
 
     var body: some View {
         Form {
-            Section {
-                ForEach(model.value.excludedApps, id: \.self) { bundleID in
-                    AppRow(bundleID: bundleID) {
-                        model.value.excludedApps.removeAll { $0 == bundleID }
+            ForEach($model.value.appRules, id: \.bundleID) { $rule in
+                Section {
+                    AppRuleRows(rule: $rule) {
+                        model.value.appRules.removeAll { $0.bundleID == rule.bundleID }
                     }
                 }
+            }
+            Section {
                 Button("Thêm ứng dụng…", action: addApp)
-            } header: {
-                Text("Ứng dụng tắt Ankey")
             } footer: {
-                SectionFooter("Trong các ứng dụng này Ankey không ghép dấu, phím gõ đi thẳng vào ứng dụng.")
+                SectionFooter("Mỗi ứng dụng có thể tắt Ankey, hoặc chọn cách chèn chữ riêng. Ứng dụng không có trong danh sách theo tab Chung.")
             }
         }
         .formStyle(.grouped)
@@ -243,9 +243,44 @@ struct AppsTab: View {
         guard panel.runModal() == .OK,
               let url = panel.url,
               let bundleID = Bundle(url: url)?.bundleIdentifier,
-              !model.value.excludedApps.contains(bundleID)
+              !model.value.appRules.contains(where: { $0.bundleID == bundleID })
         else { return }
-        model.value.excludedApps.append(bundleID)
+        model.value.appRules.append(AppRule(bundleID: bundleID))
+    }
+}
+
+/// The rows of one app: who it is, whether Ankey runs, and how it behaves there.
+struct AppRuleRows: View {
+    @Binding var rule: AppRule
+    let onDelete: () -> Void
+
+    var body: some View {
+        AppRow(bundleID: rule.bundleID, onDelete: onDelete)
+        Toggle("Bật Ankey", isOn: $rule.enabled)
+            .toggleStyle(.switch)
+        if rule.enabled {
+            Picker("Cách chèn chữ", selection: $rule.insertion) {
+                Text("Gạch chân khi gõ").tag(Insertion.marked)
+                Text("Chèn trực tiếp").tag(Insertion.direct)
+            }
+            .help("Chèn trực tiếp không để chữ chờ gạch chân, nên Cmd+A và các phím tắt khác thấy đủ chữ. Một số ứng dụng không hỗ trợ.")
+            OverridePicker(title: "Giữ nguyên chữ không phải tiếng Việt", value: $rule.restoreRaw)
+            OverridePicker(title: "Esc huỷ từ đang gõ", value: $rule.escClears)
+        }
+    }
+}
+
+/// An on/off choice that can also follow the General tab.
+struct OverridePicker: View {
+    let title: String
+    @Binding var value: Bool?
+
+    var body: some View {
+        Picker(title, selection: $value) {
+            Text("Theo tab Chung").tag(Bool?.none)
+            Text("Bật").tag(Bool?.some(true))
+            Text("Tắt").tag(Bool?.some(false))
+        }
     }
 }
 
