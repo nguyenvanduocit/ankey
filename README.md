@@ -2,7 +2,7 @@
 
 ![Ankey: bộ gõ Telex cho macOS](.github/social-preview.png)
 
-Ankey là bộ gõ Telex cho macOS. Mình tự làm vì mình làm được. Điểm mình để ý nhất là gõ lẫn Việt và Anh: `smart`, `text`, `hello` ra đúng như gõ, `does` giữ nguyên là `does` thay vì `doé`, còn `cảm own` vẫn ra `cảm ơn`.
+Ankey là bộ gõ Telex cho macOS.
 
 Chạy trên Apple silicon, macOS 13 trở lên. Không dùng thư viện bên ngoài. Phần lõi khoảng 1.300 dòng Swift.
 
@@ -12,7 +12,7 @@ Chạy trên Apple silicon, macOS 13 trở lên. Không dùng thư viện bên n
 curl -fsSL https://raw.githubusercontent.com/nguyenvanduocit/ankey/main/install.sh | sh
 ```
 
-Đăng xuất rồi đăng nhập lại, sau đó thêm **Ankey** ở System Settings → Keyboard → Input Sources → Edit… → **+** → Vietnamese. Muốn cài tay thì giải nén [bản release mới nhất](../../releases/latest) vào `~/Library/Input Methods/`.
+Đăng xuất rồi đăng nhập lại, sau đó thêm **Ankey** ở System Settings → Keyboard → Input Sources → Edit… → **+** → Vietnamese.
 
 ## Phân biệt tiếng Anh và tiếng Việt
 
@@ -41,30 +41,6 @@ Engine không sửa chữ đang hiện trên màn hình. Nó giữ **các phím 
 - Esc trả về phím thô. Nếu Ankey đã đổi `test` thành `tét`, một lần Esc cho lại `test`.
 
 Vì thấy cả từ nên phím dấu không cần đúng thứ tự. `vieetj` và `vietej` đều ra `việt`. `duwocj` và `duocwj` đều ra `dược`. Phím mũ có thể đến sau các nguyên âm theo sau (`vayaj` → `vậy`, `toio` → `tôi`) hoặc sau phụ âm cuối. Phím dấu thanh nằm ngay trước phím mũ thì phá cặp, nên `verse` và `reference` giữ nguyên mọi chữ.
-
-## Cấu trúc code
-
-`Engine`, `Settings` và `Release` không làm I/O, nên chạy được trong test mà không cần mock. `build.sh` chạy các test này trước và chỉ build app khi chúng qua. Phần nói chuyện với macOS (`IMKInputController`, menu, updater) nằm riêng bên ngoài. Chi tiết ở [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
-
-## Tự cập nhật
-
-Bộ gõ nhận mọi phím bạn bấm, nên mình kiểm tra bản cập nhật kỹ trước khi thay app đang cài. Updater cài thử từ một bản sao trong thư mục tạm, và dừng ở bước đầu tiên thất bại để app đang cài còn nguyên:
-
-1. SHA-256 của file zip so với checksum đã công bố.
-2. Chữ ký code so với yêu cầu `anchor apple generic and certificate leaf[subject.OU] = "694MCRBCD6"`.
-3. Bundle ID.
-4. Version so với tag của release.
-
-Bản release được ký bằng Developer ID và notarize bởi CI từ tag. Xem [docs/RELEASING.md](docs/RELEASING.md).
-
-## Build từ source
-
-```
-./build.sh             # chạy test của engine, build và ký dist/Ankey.app
-./build.sh --install   # build xong cài luôn vào ~/Library/Input Methods
-```
-
-Chữ ký dùng Developer ID Application đầu tiên trong keychain; đặt `SIGN_IDENTITY=<hash hoặc tên>` để chọn cái khác. Không có identity nào thì app được ký ad-hoc: chạy được trên máy bạn nhưng không tự cập nhật. Fork muốn phát hành riêng thì đổi `AnkeyReleaseRepo` trong `Info.plist`.
 
 ## Cảm ơn
 
