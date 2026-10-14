@@ -8,21 +8,47 @@ final class SettingsModel: ObservableObject {
     }
 }
 
+enum SettingsTab: CaseIterable {
+    case general, macros, apps, updates
+
+    var title: String {
+        switch self {
+        case .general: return "Chung"
+        case .macros: return "Gõ tắt"
+        case .apps: return "Ứng dụng"
+        case .updates: return "Cập nhật"
+        }
+    }
+}
+
 struct SettingsView: View {
     @ObservedObject var model: SettingsModel
+    @State private var tab = SettingsTab.general
 
     var body: some View {
-        TabView {
-            GeneralTab(model: model)
-                .tabItem { Label("Chung", systemImage: "gearshape") }
-            MacrosTab(model: model)
-                .tabItem { Label("Gõ tắt", systemImage: "text.badge.plus") }
-            AppsTab(model: model)
-                .tabItem { Label("Ứng dụng", systemImage: "app.badge") }
-            UpdatesTab()
-                .tabItem { Label("Cập nhật", systemImage: "arrow.down.circle") }
+        VStack(spacing: 0) {
+            HStack(spacing: 2 * Pixel.unit) {
+                ForEach(SettingsTab.allCases, id: \.self) { item in
+                    Button { tab = item } label: {
+                        Text(item.title).frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(PixelButtonStyle(primary: tab == item))
+                }
+            }
+            .padding(.horizontal, 8 * Pixel.unit)
+            .padding(.top, 4 * Pixel.unit)
+
+            switch tab {
+            case .general: GeneralTab(model: model)
+            case .macros: MacrosTab(model: model)
+            case .apps: AppsTab(model: model)
+            case .updates: UpdatesTab()
+            }
         }
+        .font(Pixel.font())
+        .foregroundStyle(Pixel.text)
         .frame(width: 520, height: 440)
+        .background(Pixel.bg)
     }
 }
 
@@ -36,6 +62,8 @@ final class SettingsWindowController: NSWindowController {
         window.title = "Cài đặt Ankey"
         window.styleMask = [.titled, .closable, .fullSizeContentView]
         window.titlebarAppearsTransparent = true
+        window.appearance = NSAppearance(named: .darkAqua)
+        window.backgroundColor = NSColor(Pixel.bg)
         window.isReleasedWhenClosed = false
         super.init(window: window)
     }

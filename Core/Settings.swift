@@ -64,13 +64,29 @@ enum Insertion: String {
     case direct
 }
 
-/// How Ankey behaves in one app. `nil` fields follow the General tab.
+/// What Ankey does in one app: stays out of the way, or composes with one of the two insertions.
+enum AppMode {
+    case off, marked, direct
+}
+
+/// How Ankey behaves in one app.
 struct AppRule: Equatable {
     var bundleID: String
     var enabled = true
     var insertion = Insertion.marked
-    var restoreRaw: Bool?
-    var escClears: Bool?
+
+    /// The single choice behind `enabled` and `insertion`. Turning it off keeps the last insertion.
+    var mode: AppMode {
+        get { !enabled ? .off : insertion == .direct ? .direct : .marked }
+        set {
+            enabled = newValue != .off
+            switch newValue {
+            case .off: break
+            case .marked: insertion = .marked
+            case .direct: insertion = .direct
+            }
+        }
+    }
 
     /// Trimmed IDs, empty ones dropped, first rule of an ID wins.
     static func cleaned(_ rules: [AppRule]) -> [AppRule] {
@@ -83,12 +99,10 @@ struct AppRule: Equatable {
         return result
     }
 
-    init(bundleID: String, enabled: Bool = true, insertion: Insertion = .marked, restoreRaw: Bool? = nil, escClears: Bool? = nil) {
+    init(bundleID: String, enabled: Bool = true, insertion: Insertion = .marked) {
         self.bundleID = bundleID
         self.enabled = enabled
         self.insertion = insertion
-        self.restoreRaw = restoreRaw
-        self.escClears = escClears
     }
 
     init?(stored row: [String: Any]) {
@@ -96,17 +110,12 @@ struct AppRule: Equatable {
         self.init(
             bundleID: bundleID,
             enabled: row["enabled"] as? Bool ?? true,
-            insertion: (row["insertion"] as? String).flatMap(Insertion.init(rawValue:)) ?? .marked,
-            restoreRaw: row["restoreRaw"] as? Bool,
-            escClears: row["escClears"] as? Bool
+            insertion: (row["insertion"] as? String).flatMap(Insertion.init(rawValue:)) ?? .marked
         )
     }
 
     var stored: [String: Any] {
-        var row: [String: Any] = ["bundleID": bundleID, "enabled": enabled, "insertion": insertion.rawValue]
-        if let restoreRaw { row["restoreRaw"] = restoreRaw }
-        if let escClears { row["escClears"] = escClears }
-        return row
+        ["bundleID": bundleID, "enabled": enabled, "insertion": insertion.rawValue]
     }
 }
 
@@ -142,14 +151,6 @@ extension Settings {
     /// The rule for an app. An unknown client, or one without a bundle ID, gets the default rule.
     func rule(for bundleID: String?) -> AppRule {
         appRules.first { $0.bundleID == bundleID } ?? AppRule(bundleID: bundleID ?? "")
-    }
-
-    /// The settings with the rule's overrides applied.
-    func applying(_ rule: AppRule) -> Settings {
-        var settings = self
-        settings.restoreRaw = rule.restoreRaw ?? restoreRaw
-        settings.escClears = rule.escClears ?? escClears
-        return settings
     }
 
     /// A key that was never saved, or holds the wrong type, keeps its default.

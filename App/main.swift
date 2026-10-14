@@ -11,6 +11,8 @@ if CommandLine.arguments.dropFirst().contains("enable") {
     exit(0)
 }
 
+Pixel.registerFont()
+
 // NSClassFromString loads the controller by the plist name. Keep the class linked.
 _ = AnkeyInputController.self
 

@@ -15,20 +15,27 @@ struct UpdatesTab: View {
     }
 
     var body: some View {
-        Form {
-            Section {
-                LabeledContent("Phiên bản hiện tại", value: Updater.currentVersion.text)
-                LabeledContent("Kiểm tra lần cuối", value: lastCheckText)
+        PixelPage {
+            PixelSection(
+                title: "Cập nhật",
+                footer: "Ankey tự kiểm tra mỗi ngày một lần và chỉ cài khi bạn bấm Cập nhật."
+            ) {
+                row("Phiên bản hiện tại", Updater.currentVersion.text)
+                row("Kiểm tra lần cuối", lastCheckText)
                 statusRow
                 Button("Kiểm tra ngay") { updater.check(userInitiated: true) }
+                    .buttonStyle(PixelButtonStyle())
                     .disabled(isBusy)
-            } header: {
-                Text("Cập nhật")
-            } footer: {
-                SectionFooter("Ankey tự kiểm tra mỗi ngày một lần và chỉ cài khi bạn bấm Cập nhật.")
             }
         }
-        .formStyle(.grouped)
+    }
+
+    private func row(_ title: String, _ value: String) -> some View {
+        HStack {
+            Text(title)
+            Spacer()
+            Text(value).foregroundStyle(Pixel.muted)
+        }
     }
 
     @ViewBuilder
@@ -37,32 +44,33 @@ struct UpdatesTab: View {
         case .idle:
             EmptyView()
         case .checking:
-            HStack {
-                ProgressView().controlSize(.small)
+            HStack(spacing: 3 * Pixel.unit) {
+                PixelSpinner()
                 Text("Đang kiểm tra…")
             }
         case .upToDate:
             Text("Bạn đang dùng bản mới nhất.")
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Pixel.muted)
         case .available(let release):
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: 3 * Pixel.unit) {
                 Text("Có bản mới \(release.version.text)")
-                    .fontWeight(.semibold)
+                    .foregroundStyle(Pixel.gold)
                 if !release.notes.isEmpty {
                     Text(release.notes)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .font(Pixel.font(15))
+                        .foregroundStyle(Pixel.muted)
                 }
                 Button("Cập nhật lên \(release.version.text)") { updater.install() }
+                    .buttonStyle(PixelButtonStyle(primary: true))
             }
         case .installing:
-            HStack {
-                ProgressView().controlSize(.small)
+            HStack(spacing: 3 * Pixel.unit) {
+                PixelSpinner()
                 Text("Đang cập nhật…")
             }
         case .failed(let message):
             Text(message)
-                .foregroundStyle(.red)
+                .foregroundStyle(Pixel.danger)
         }
     }
 }

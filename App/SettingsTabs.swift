@@ -2,68 +2,38 @@ import Cocoa
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// A switch with a one-line explanation under its title.
-struct OptionToggle: View {
-    let title: String
-    let detail: String
-    @Binding var isOn: Bool
-
-    var body: some View {
-        Toggle(isOn: $isOn) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                Text(detail)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .toggleStyle(.switch)
-    }
-}
-
-/// Footer text of a grouped-Form section, left-aligned across the full section width.
-struct SectionFooter: View {
-    let text: String
-
-    init(_ text: String) { self.text = text }
-
-    var body: some View {
-        Text(text)
-            .multilineTextAlignment(.leading)
-            .frame(maxWidth: .infinity, alignment: .leading)
-    }
-}
-
 struct GeneralTab: View {
     @ObservedObject var model: SettingsModel
 
     var body: some View {
-        Form {
-            Section {
-                Picker("Kiểu đặt dấu", selection: $model.value.toneStyle) {
-                    Text("Kiểu mới (hoà, thuý)").tag(ToneStyle.modern)
-                    Text("Kiểu cũ (hòa, thúy)").tag(ToneStyle.classic)
-                }
-            } header: {
-                Text("Gõ tiếng Việt")
-            } footer: {
-                SectionFooter("Hai kiểu chỉ khác nhau ở oa, oe, uy khi không có phụ âm cuối.")
+        PixelPage {
+            PixelSection(
+                title: "Gõ tiếng Việt",
+                footer: "Hai kiểu chỉ khác nhau ở oa, oe, uy khi không có phụ âm cuối."
+            ) {
+                PixelChoice(
+                    title: "Kiểu đặt dấu",
+                    selection: $model.value.toneStyle,
+                    options: [
+                        ("Kiểu mới (hoà, thuý)", ToneStyle.modern),
+                        ("Kiểu cũ (hòa, thúy)", ToneStyle.classic),
+                    ]
+                )
             }
 
-            Section("Hành vi") {
-                OptionToggle(
+            PixelSection(title: "Hành vi") {
+                PixelToggle(
                     title: "Giữ nguyên chữ không phải tiếng Việt",
                     detail: "Gõ smart, text, hello ra đúng chữ đã gõ.",
                     isOn: $model.value.restoreRaw
                 )
-                OptionToggle(
+                PixelToggle(
                     title: "Esc huỷ từ đang gõ",
                     detail: "Từ đã ghép dấu: Esc trả lại chữ đã gõ. Từ khác: bật thì xoá từ, tắt thì chốt từ rồi gửi Esc cho ứng dụng.",
                     isOn: $model.value.escClears
                 )
             }
         }
-        .formStyle(.grouped)
     }
 }
 
@@ -82,26 +52,34 @@ struct MacroRow: View {
     }
 
     var body: some View {
-        HStack {
+        HStack(spacing: 2 * Pixel.unit) {
             TextField("Phím tắt", text: $macro.shortcut, prompt: Text("Phím tắt"))
                 .labelsHidden()
-                .textFieldStyle(.roundedBorder)
-                .frame(width: 100)
-            Image(systemName: "arrow.right")
-                .foregroundStyle(.secondary)
+                .pixelField()
+                .frame(width: 110)
+            Text("»").foregroundStyle(Pixel.accent)
             TextField("Nội dung", text: $macro.text, prompt: Text("Nội dung"))
                 .labelsHidden()
-                .textFieldStyle(.roundedBorder)
+                .pixelField()
             if let problemText {
                 Text(problemText)
-                    .font(.caption)
-                    .foregroundStyle(.red)
+                    .font(Pixel.font(15))
+                    .foregroundStyle(Pixel.danger)
             }
-            Button(action: onDelete) {
-                Image(systemName: "minus.circle")
-            }
-            .buttonStyle(.borderless)
-            .help("Xoá")
+            PixelRemoveButton(action: onDelete)
+        }
+    }
+}
+
+struct WordRow: View {
+    let word: String
+    let onDelete: () -> Void
+
+    var body: some View {
+        HStack {
+            Text(word)
+            Spacer()
+            PixelRemoveButton(action: onDelete)
         }
     }
 }
@@ -113,8 +91,11 @@ struct MacrosTab: View {
 
     var body: some View {
         let problems = Macro.problems(in: model.value.macros)
-        Form {
-            Section {
+        PixelPage {
+            PixelSection(
+                title: "Mở rộng văn bản",
+                footer: "Gõ phím tắt rồi bấm cách để thay bằng nội dung. Chữ hoa của phím tắt được áp vào kết quả."
+            ) {
                 ForEach($model.value.macros) { $macro in
                     MacroRow(macro: $macro, problem: problems[macro.id]) {
                         model.value.macros.removeAll { $0.id == macro.id }
@@ -123,72 +104,53 @@ struct MacrosTab: View {
                 Button("Thêm phím tắt") {
                     model.value.macros.append(Macro(shortcut: "", text: ""))
                 }
-            } header: {
-                Text("Mở rộng văn bản")
-            } footer: {
-                SectionFooter("Gõ phím tắt rồi bấm cách để thay bằng nội dung. Chữ hoa của phím tắt được áp vào kết quả.")
+                .buttonStyle(PixelButtonStyle())
             }
 
-            Section {
-                OptionToggle(
+            PixelSection(title: "Từ viết tắt") {
+                PixelToggle(
                     title: "Cho phép từ viết tắt",
                     detail: "Những từ dưới đây được ghép dấu dù không phải âm tiết tiếng Việt. Cần bật mục giữ nguyên chữ ở tab Chung.",
                     isOn: $model.value.abbreviation
                 )
                 ForEach(model.value.shorthand, id: \.self) { word in
-                    HStack {
-                        Text(word)
-                        Spacer()
-                        Button {
-                            model.value.shorthand.removeAll { $0 == word }
-                        } label: {
-                            Image(systemName: "minus.circle")
-                        }
-                        .buttonStyle(.borderless)
-                        .help("Xoá")
+                    WordRow(word: word) {
+                        model.value.shorthand.removeAll { $0 == word }
                     }
                 }
-                HStack {
+                HStack(spacing: 2 * Pixel.unit) {
                     TextField("Từ mới", text: $newWord, prompt: Text("Từ mới, ví dụ đt"))
                         .labelsHidden()
+                        .pixelField()
                         .onSubmit(addWord)
                     Button("Thêm", action: addWord)
+                        .buttonStyle(PixelButtonStyle())
                         .disabled(normalizedNewWord.isEmpty)
                 }
-            } header: {
-                Text("Từ viết tắt")
             }
             .disabled(!model.value.restoreRaw)
 
-            Section {
+            PixelSection(
+                title: "Từ tiếng Anh giữ nguyên",
+                footer: "Những từ này luôn ra đúng chữ đã gõ, ví dụ test không thành tét. Cần bật mục giữ nguyên chữ ở tab Chung."
+            ) {
                 ForEach(model.value.keepEnglish, id: \.self) { word in
-                    HStack {
-                        Text(word)
-                        Spacer()
-                        Button {
-                            model.value.keepEnglish.removeAll { $0 == word }
-                        } label: {
-                            Image(systemName: "minus.circle")
-                        }
-                        .buttonStyle(.borderless)
-                        .help("Xoá")
+                    WordRow(word: word) {
+                        model.value.keepEnglish.removeAll { $0 == word }
                     }
                 }
-                HStack {
+                HStack(spacing: 2 * Pixel.unit) {
                     TextField("Từ mới", text: $newEnglish, prompt: Text("Từ mới, ví dụ test"))
                         .labelsHidden()
+                        .pixelField()
                         .onSubmit(addEnglish)
                     Button("Thêm", action: addEnglish)
+                        .buttonStyle(PixelButtonStyle())
                         .disabled(normalizedNewEnglish.isEmpty)
                 }
-            } header: {
-                Text("Từ tiếng Anh giữ nguyên")
-            } footer: {
-                SectionFooter("Những từ này luôn ra đúng chữ đã gõ, ví dụ test không thành tét. Cần bật mục giữ nguyên chữ ở tab Chung.")
             }
             .disabled(!model.value.restoreRaw)
         }
-        .formStyle(.grouped)
     }
 
     private var normalizedNewEnglish: String {
@@ -216,36 +178,121 @@ struct MacrosTab: View {
 
 struct AppsTab: View {
     @ObservedObject var model: SettingsModel
+    @State private var showPicker = false
 
     var body: some View {
-        Form {
+        PixelPage {
             ForEach($model.value.appRules, id: \.bundleID) { $rule in
-                Section {
+                PixelSection {
                     AppRuleRows(rule: $rule) {
                         model.value.appRules.removeAll { $0.bundleID == rule.bundleID }
                     }
                 }
             }
-            Section {
-                Button("Thêm ứng dụng…", action: addApp)
-            } footer: {
-                SectionFooter("Mỗi ứng dụng có thể tắt Ankey, hoặc chọn cách chèn chữ riêng. Ứng dụng không có trong danh sách theo tab Chung.")
+            PixelSection(
+                footer: "Mỗi ứng dụng chọn tắt Ankey, gạch chân hoặc chèn trực tiếp. Ứng dụng không có trong danh sách dùng gạch chân."
+            ) {
+                Button("Thêm ứng dụng…") { showPicker = true }
+                    .buttonStyle(PixelButtonStyle())
             }
         }
-        .formStyle(.grouped)
+        .sheet(isPresented: $showPicker) {
+            RunningAppPicker(
+                added: Set(model.value.appRules.map(\.bundleID)),
+                onPick: add,
+                onBrowse: {
+                    showPicker = false
+                    DispatchQueue.main.async(execute: browse)
+                },
+                onClose: { showPicker = false }
+            )
+        }
     }
 
-    private func addApp() {
+    private func add(_ bundleID: String) {
+        guard !model.value.appRules.contains(where: { $0.bundleID == bundleID }) else { return }
+        model.value.appRules.append(AppRule(bundleID: bundleID))
+    }
+
+    private func browse() {
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [.application]
         panel.directoryURL = URL(fileURLWithPath: "/Applications")
         panel.allowsMultipleSelection = false
         guard panel.runModal() == .OK,
               let url = panel.url,
-              let bundleID = Bundle(url: url)?.bundleIdentifier,
-              !model.value.appRules.contains(where: { $0.bundleID == bundleID })
+              let bundleID = Bundle(url: url)?.bundleIdentifier
         else { return }
-        model.value.appRules.append(AppRule(bundleID: bundleID))
+        add(bundleID)
+    }
+}
+
+/// The apps that are running now, so the common case is one click. Browsing the disk is the fallback.
+struct RunningAppPicker: View {
+    let added: Set<String>
+    let onPick: (String) -> Void
+    let onBrowse: () -> Void
+    let onClose: () -> Void
+
+    private var apps: [(bundleID: String, name: String, icon: NSImage?)] {
+        NSWorkspace.shared.runningApplications
+            .filter { $0.activationPolicy == .regular }
+            .compactMap { app in
+                guard let id = app.bundleIdentifier, !added.contains(id) else { return nil }
+                return (id, app.localizedName ?? id, app.icon)
+            }
+            .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+    }
+
+    var body: some View {
+        let apps = apps
+        VStack(alignment: .leading, spacing: 4 * Pixel.unit) {
+            Text("ĐANG CHẠY")
+                .font(Pixel.font(16))
+                .foregroundStyle(Pixel.accent)
+            ScrollView {
+                VStack(spacing: 2 * Pixel.unit) {
+                    ForEach(apps, id: \.bundleID) { app in
+                        Button {
+                            onPick(app.bundleID)
+                            onClose()
+                        } label: {
+                            HStack(spacing: 3 * Pixel.unit) {
+                                if let icon = app.icon {
+                                    Image(nsImage: icon).resizable().frame(width: 28, height: 28)
+                                }
+                                VStack(alignment: .leading) {
+                                    Text(app.name)
+                                    Text(app.bundleID)
+                                        .font(Pixel.font(15))
+                                        .foregroundStyle(Pixel.muted)
+                                }
+                                Spacer(minLength: 0)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .buttonStyle(PixelButtonStyle())
+                    }
+                    if apps.isEmpty {
+                        Text("Không còn ứng dụng nào đang chạy để thêm.")
+                            .foregroundStyle(Pixel.muted)
+                            .padding(.vertical, 4 * Pixel.unit)
+                    }
+                }
+            }
+            HStack(spacing: 2 * Pixel.unit) {
+                Button("Duyệt…", action: onBrowse)
+                    .buttonStyle(PixelButtonStyle())
+                Spacer()
+                Button("Đóng", action: onClose)
+                    .buttonStyle(PixelButtonStyle(primary: true))
+            }
+        }
+        .padding(6 * Pixel.unit)
+        .font(Pixel.font())
+        .foregroundStyle(Pixel.text)
+        .frame(width: 440, height: 380)
+        .background(Pixel.bg)
     }
 }
 
@@ -256,31 +303,16 @@ struct AppRuleRows: View {
 
     var body: some View {
         AppRow(bundleID: rule.bundleID, onDelete: onDelete)
-        Toggle("Bật Ankey", isOn: $rule.enabled)
-            .toggleStyle(.switch)
-        if rule.enabled {
-            Picker("Cách chèn chữ", selection: $rule.insertion) {
-                Text("Gạch chân khi gõ").tag(Insertion.marked)
-                Text("Chèn trực tiếp").tag(Insertion.direct)
-            }
-            .help("Chèn trực tiếp không để chữ chờ gạch chân, nên Cmd+A và các phím tắt khác thấy đủ chữ. Một số ứng dụng không hỗ trợ.")
-            OverridePicker(title: "Giữ nguyên chữ không phải tiếng Việt", value: $rule.restoreRaw)
-            OverridePicker(title: "Esc huỷ từ đang gõ", value: $rule.escClears)
-        }
-    }
-}
-
-/// An on/off choice that can also follow the General tab.
-struct OverridePicker: View {
-    let title: String
-    @Binding var value: Bool?
-
-    var body: some View {
-        Picker(title, selection: $value) {
-            Text("Theo tab Chung").tag(Bool?.none)
-            Text("Bật").tag(Bool?.some(true))
-            Text("Tắt").tag(Bool?.some(false))
-        }
+        PixelChoice(
+            title: "Gõ tiếng Việt",
+            selection: $rule.mode,
+            options: [
+                ("Tắt", AppMode.off),
+                ("Gạch chân", AppMode.marked),
+                ("Trực tiếp", AppMode.direct),
+            ],
+            help: "Gạch chân: chữ đang gõ được gạch chân cho tới khi chốt. Trực tiếp: chữ không chờ gạch chân, nên Cmd+A và các phím tắt khác thấy đủ chữ. Một số ứng dụng không hỗ trợ."
+        )
     }
 }
 
@@ -307,15 +339,11 @@ struct AppRow: View {
             VStack(alignment: .leading) {
                 Text(info.name)
                 Text(bundleID)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .font(Pixel.font(15))
+                    .foregroundStyle(Pixel.muted)
             }
             Spacer()
-            Button(action: onDelete) {
-                Image(systemName: "minus.circle")
-            }
-            .buttonStyle(.borderless)
-            .help("Xoá")
+            PixelRemoveButton(action: onDelete)
         }
     }
 }

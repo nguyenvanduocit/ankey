@@ -16,7 +16,7 @@ final class AnkeyInputController: IMKInputController {
     private func context(_ sender: Any!) -> Context {
         let stored = Settings.load()
         let rule = stored.rule(for: textClient(sender)?.bundleIdentifier())
-        return Context(settings: stored.applying(rule), rule: rule)
+        return Context(settings: stored, rule: rule)
     }
 
     // Overriding handle makes it the only entry point: IMK stops calling inputText and
@@ -155,12 +155,12 @@ final class AnkeyInputController: IMKInputController {
     @objc private func confirmUpdate(_ sender: Any?) {
         guard case .available(let release) = Updater.shared.state else { return }
         NSApp.activate(ignoringOtherApps: true)
-        let alert = NSAlert()
-        alert.messageText = "Ankey \(release.version.text) đã có"
-        alert.informativeText = release.notes.isEmpty ? "Cài bản mới và khởi động lại Ankey?" : release.notes
-        alert.addButton(withTitle: "Cập nhật")
-        alert.addButton(withTitle: "Để sau")
-        if alert.runModal() == .alertFirstButtonReturn {
+        let choice = runPixelAlert(
+            title: "Ankey \(release.version.text) đã có",
+            message: release.notes.isEmpty ? "Cài bản mới và khởi động lại Ankey?" : release.notes,
+            buttons: ["Cập nhật", "Để sau"]
+        )
+        if choice == 0 {
             Updater.shared.install()
         }
     }
@@ -202,11 +202,7 @@ final class AnkeyInputController: IMKInputController {
         let joke = Self.jokes[Self.jokeIndex % Self.jokes.count]
         Self.jokeIndex += 1
         NSApp.activate(ignoringOtherApps: true)
-        let alert = NSAlert()
-        alert.messageText = joke.title
-        alert.informativeText = joke.body
-        alert.addButton(withTitle: joke.button)
-        alert.runModal()
+        runPixelAlert(title: joke.title, message: joke.body, buttons: [joke.button])
     }
 
     private func commit(_ sender: Any!, _ ctx: Context, expand: Bool) {

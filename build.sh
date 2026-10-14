@@ -18,7 +18,7 @@ swiftc -swift-version 5 -target arm64-apple-macosx13.0 \
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$ROOT/Info.plist" "$APP/Contents/Info.plist"
-cp "$ROOT/Resources/Ankey.tiff" "$ROOT/Resources/AppIcon.icns" "$APP/Contents/Resources/"
+cp "$ROOT/Resources/Ankey.tiff" "$ROOT/Resources/AppIcon.icns" "$ROOT/Resources/VT323-Regular.ttf" "$ROOT/Resources/VT323-OFL.txt" "$APP/Contents/Resources/"
 printf 'APPL????' > "$APP/Contents/PkgInfo"
 
 swiftc -swift-version 5 -O -target arm64-apple-macosx13.0 \

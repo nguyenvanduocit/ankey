@@ -149,7 +149,7 @@ func checkMacroStorage() {
     settings.shorthand = ["\u{0111}t"]
     settings.appRules = [
         AppRule(bundleID: "com.apple.Terminal", enabled: false),
-        AppRule(bundleID: "com.tdesktop.Telegram", insertion: .direct, restoreRaw: false, escClears: true),
+        AppRule(bundleID: "com.tdesktop.Telegram", insertion: .direct),
     ]
     settings.save(to: defaults)
     expect(Settings.load(from: defaults), settings, "round trip")
@@ -232,21 +232,22 @@ func checkAppRules() {
     var settings = Settings()
     settings.appRules = [
         AppRule(bundleID: "com.apple.Terminal", enabled: false),
-        AppRule(bundleID: "com.tdesktop.Telegram", insertion: .direct, restoreRaw: false),
+        AppRule(bundleID: "com.tdesktop.Telegram", insertion: .direct),
     ]
     expect(settings.rule(for: "com.apple.Terminal").enabled, false, "rule off")
+    var mode = AppRule(bundleID: "x")
+    expect(mode.mode, .marked, "default mode")
+    mode.mode = .direct
+    expect([mode.enabled, mode.insertion == .direct], [true, true], "direct mode")
+    mode.mode = .off
+    expect([mode.enabled, mode.insertion == .direct, mode.mode == .off], [false, true, true], "off keeps the insertion")
+    mode.mode = .marked
+    expect([mode.enabled, mode.insertion == .marked], [true, true], "marked mode")
     expect(settings.rule(for: "com.tdesktop.Telegram").insertion, .direct, "rule direct")
     expect(settings.rule(for: "com.apple.TextEdit"), AppRule(bundleID: "com.apple.TextEdit"), "unknown app gets the default rule")
     expect(settings.rule(for: nil), AppRule(bundleID: ""), "nil bundle id")
     expect(settings.rule(for: "").enabled, true, "empty bundle id stays on")
     expect(Settings().rule(for: "com.apple.Terminal").enabled, true, "no rules switch nothing off")
-
-    // Overrides replace the General value. nil follows it.
-    expect(settings.restoreRaw, true, "General restoreRaw")
-    expect(settings.applying(settings.rule(for: "com.tdesktop.Telegram")).restoreRaw, false, "restoreRaw override")
-    expect(settings.applying(settings.rule(for: "com.tdesktop.Telegram")).escClears, true, "escClears follows General")
-    settings.escClears = false
-    expect(settings.applying(settings.rule(for: "com.tdesktop.Telegram")).escClears, false, "escClears follows a changed General")
 }
 
 func checkRelease() {

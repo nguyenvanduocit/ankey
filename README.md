@@ -48,7 +48,7 @@ Open them from the Ankey input-source menu → **Cài đặt…** (⌘,). Change
 |---|---|
 | **Chung** | Tone placement: modern (`hoà`, `thuý`) or classic (`hòa`, `thúy`). Keep non-Vietnamese words as typed. Esc cancels or commits the word. |
 | **Gõ tắt** | Text expansion, the list of abbreviations that may take marks (`đc` by default), and the list of English words kept as typed. |
-| **Ứng dụng** | Apps where Ankey does not compose. Keys go straight to the app. |
+| **Ứng dụng** | Per app: Tắt (keys go straight to the app), Gạch chân (the word is underlined while you type) or Trực tiếp (the word is inserted as plain text). |
 | **Cập nhật** | Current version, update check, install. |
 
 ### Text expansion
