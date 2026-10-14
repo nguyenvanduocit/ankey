@@ -73,12 +73,8 @@ struct FeedbackHUDView: View {
             Spacer(minLength: 0)
             Text(verbatim: "\(text.count)/\(Capture.limit)").foregroundStyle(Pixel.muted)
         }
-        Group {
-            if text.isEmpty {
-                Text("Gõ nội dung rồi nhấn Enter…").foregroundStyle(Pixel.muted)
-            } else {
-                Text(Self.tail(text) + "▌")
-            }
+        TimelineView(.periodic(from: .now, by: Self.blinkInterval)) { context in
+            Self.entry(text, caretOn: phase != .sending && Self.caretVisible(at: context.date))
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .fixedSize(horizontal: false, vertical: true)
@@ -104,6 +100,23 @@ struct FeedbackHUDView: View {
             Text("Chưa gửi được: \(reason)").foregroundStyle(Pixel.danger)
             Text("Enter thử lại · Esc huỷ").foregroundStyle(Pixel.muted)
         }
+    }
+
+    private static let blinkInterval = 0.5
+
+    private static func caretVisible(at date: Date) -> Bool {
+        Int(date.timeIntervalSinceReferenceDate / blinkInterval) % 2 == 0
+    }
+
+    /// The text with the caret at its end, or in front of the hint when the box is empty. An unlit
+    /// caret keeps its width, so the line never reflows as it blinks.
+    private static func entry(_ text: String, caretOn: Bool) -> Text {
+        let caret = Text(verbatim: "▌").foregroundColor(caretOn ? Pixel.text : Color.clear)
+        guard !text.isEmpty else {
+            let hint = Text(verbatim: "Gõ nội dung rồi nhấn Enter…").foregroundColor(Pixel.muted)
+            return Text("\(caret)\(hint)")
+        }
+        return Text("\(Text(verbatim: tail(text)))\(caret)")
     }
 
     private static func tail(_ text: String) -> String {
