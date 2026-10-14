@@ -12,7 +12,7 @@ APP="$ROOT/dist/Ankey.app"
 
 swiftc -swift-version 5 -target arm64-apple-macosx13.0 \
     -o /tmp/ankey-tests \
-    "$ROOT/Engine.swift" "$ROOT/Settings.swift" "$ROOT/Release.swift" "$ROOT/TestMain.swift"
+    "$ROOT"/Core/*.swift "$ROOT"/Tests/*.swift
 /tmp/ankey-tests
 
 rm -rf "$APP"
@@ -24,9 +24,7 @@ printf 'APPL????' > "$APP/Contents/PkgInfo"
 swiftc -swift-version 5 -O -target arm64-apple-macosx13.0 \
     -framework Cocoa -framework InputMethodKit -framework Carbon -framework SwiftUI -framework Security \
     -o "$APP/Contents/MacOS/Ankey" \
-    "$ROOT/Engine.swift" "$ROOT/Settings.swift" "$ROOT/Release.swift" "$ROOT/Updater.swift" \
-    "$ROOT/SettingsWindow.swift" "$ROOT/SettingsTabs.swift" "$ROOT/UpdatesTab.swift" \
-    "$ROOT/InputController.swift" "$ROOT/main.swift"
+    "$ROOT"/Core/*.swift "$ROOT"/App/*.swift
 
 # SIGN_IDENTITY picks the signing identity. Without it, the first Developer ID Application
 # identity in the keychain signs the app.
