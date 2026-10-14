@@ -38,7 +38,7 @@ jobs:
           security import "$RUNNER_TEMP/DeveloperIDG2CA.cer" -k "$KEYCHAIN" -T /usr/bin/codesign
           security import "$RUNNER_TEMP/cert.p12" -k "$KEYCHAIN" -P "$CERT_P12_PASSWORD" -T /usr/bin/codesign
           security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
-          security list-keychains -d user -s "$KEYCHAIN" login.keychain-db
+          security list-keychains -d user -s "$KEYCHAIN" $(security list-keychains -d user | tr -d '"')
           security find-identity -v -p codesigning "$KEYCHAIN"
 
       - name: Test, build and sign
