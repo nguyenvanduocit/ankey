@@ -1,7 +1,7 @@
 #!/bin/sh
 # Build and sign dist/Ankey.app after the engine tests pass.
 #   ./build.sh            build only
-#   ./build.sh --install  also install into ~/Library/Input Methods
+#   ./build.sh --install  also install into ~/Library/Input Methods and restart the running Ankey
 # SIGN_IDENTITY=<hash or name> overrides the signing identity.
 # REQUIRE_DEVELOPER_ID=1 fails instead of falling back to an ad-hoc signature.
 set -eu
@@ -45,10 +45,11 @@ echo "built $APP"
 
 if [ "${1:-}" = "--install" ]; then
     DEST="$HOME/Library/Input Methods/Ankey.app"
-    pkill -x Ankey 2>/dev/null || true
     rm -rf "$DEST"
     cp -R "$APP" "$DEST"
     xattr -dr com.apple.quarantine "$DEST" 2>/dev/null || true
     sign "$DEST"
     echo "installed $DEST"
+    # macOS starts Ankey again from the installed copy the next time a text field needs it.
+    pkill -x Ankey 2>/dev/null || true
 fi
