@@ -36,7 +36,8 @@ struct SettingsView: View {
                 }
             }
             .padding(.horizontal, 8 * Pixel.unit)
-            .padding(.top, 4 * Pixel.unit)
+            .padding(.top, Pixel.unit)
+            .padding(.bottom, 4 * Pixel.unit)
 
             switch tab {
             case .general: GeneralTab(model: model)
