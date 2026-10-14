@@ -185,6 +185,9 @@ struct HelpView: View {
         // Settings → Gõ tắt: footer and the shortcut check.
         ("Thêm gõ tắt thế nào?",
          "Thẻ Gõ tắt → Thêm phím tắt, nhập phím tắt (chỉ chữ a–z) và nội dung. Gõ phím tắt rồi bấm cách để thay bằng nội dung."),
+        // `Trigger.all`; the Gửi góp ý… item in `AnkeyInputController.menu()`; FeedbackFlow key handling.
+        ("Báo lỗi hoặc góp ý thế nào?",
+         "Gõ ///feedback (góp ý) hay ///bug (báo lỗi) ở đầu từ, hoặc chọn Gửi góp ý… trong menu bộ gõ. Gõ nội dung rồi bấm Enter để gửi."),
         // README "Mã gõ nhanh"; FeedbackFlow key handling; FeedbackHUD note.
         ("///feedback gửi gì, ai nhận?",
          "Chỉ gửi khi bạn bấm Enter, Esc để bỏ. Gửi đoạn bạn gõ cùng macOS, chip, bảng mã, chế độ gõ, không có tên ứng dụng. Datadog còn nhận IP và user agent của bạn."),
@@ -192,12 +195,6 @@ struct HelpView: View {
         ("Cập nhật thế nào?",
          "Ankey tự kiểm tra khi mở và mỗi ngày một lần. Có bản mới thì menu bộ gõ hiện Cập nhật lên…, Ankey chỉ cài khi bạn bấm. Muốn kiểm tra ngay thì dùng thẻ Cập nhật."),
     ]
-
-    /// The repo the updater reads releases from. No repo in Info.plist means no link.
-    private var issuesURL: URL? {
-        guard let repo = Bundle.main.object(forInfoDictionaryKey: "AnkeyReleaseRepo") as? String, !repo.isEmpty else { return nil }
-        return URL(string: "https://github.com/\(repo)/issues")
-    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -213,10 +210,6 @@ struct HelpView: View {
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                     }
-                }
-                if let issuesURL {
-                    Button("Báo lỗi trên GitHub") { NSWorkspace.shared.open(issuesURL) }
-                        .buttonStyle(PixelButtonStyle())
                 }
             }
             HStack(spacing: 2 * Pixel.unit) {

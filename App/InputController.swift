@@ -93,11 +93,11 @@ final class AnkeyInputController: IMKInputController {
             commit(sender, ctx, expand: false)
             return inputText(string, client: sender)
         case .cheat(let trigger):
-            refresh(sender, ctx)
             switch trigger {
             case .report(let kind):
-                MainActor.assumeIsolated { FeedbackFlow.shared.start(kind, settings: ctx.settings) }
+                openReport(kind, sender, ctx)
             case .settings:
+                refresh(sender, ctx)
                 showSettings(nil)
             }
             return true
@@ -160,6 +160,9 @@ final class AnkeyInputController: IMKInputController {
         let help = NSMenuItem(title: "Trợ giúp…", action: #selector(showHelp(_:)), keyEquivalent: "")
         help.target = self
         menu.addItem(help)
+        let feedback = NSMenuItem(title: "Gửi góp ý…", action: #selector(startFeedback(_:)), keyEquivalent: "")
+        feedback.target = self
+        menu.addItem(feedback)
         // IMK builds the menu on the main thread.
         switch MainActor.assumeIsolated({ Updater.shared.state }) {
         case .available(let release):
@@ -191,6 +194,21 @@ final class AnkeyInputController: IMKInputController {
 
     @objc private func showHelp(_ sender: Any?) {
         MainActor.assumeIsolated { OnboardingWindowController.shared.show(.help) }
+    }
+
+    /// The menu item starts the same report as `///feedback`. IMK runs it on the controller of the active
+    /// client. With no text field focused no key could reach the report, so none starts.
+    @objc private func startFeedback(_ sender: Any?) {
+        guard textClient(sender) != nil else { return }
+        openReport(.feedback, sender, context(sender))
+    }
+
+    /// `///feedback`, `///bug` and the menu item all open a report here. A word still composing is typed
+    /// out as it is, and a held cheat code disappears from the app.
+    private func openReport(_ kind: ReportKind, _ sender: Any!, _ ctx: Context) {
+        commit(sender, ctx, expand: false)
+        refresh(sender, ctx)
+        MainActor.assumeIsolated { FeedbackFlow.shared.start(kind, settings: ctx.settings) }
     }
 
     /// The menu item and the `///ankey` code both open Settings here. IMK and AppKit call on the main thread.
