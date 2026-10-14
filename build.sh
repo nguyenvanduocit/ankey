@@ -21,7 +21,7 @@ cp "$ROOT/Info.plist" "$APP/Contents/Info.plist"
 cp "$ROOT/Resources/Ankey.tiff" "$ROOT/Resources/AppIcon.icns" "$ROOT/Resources/VT323-Regular.ttf" "$ROOT/Resources/VT323-OFL.txt" "$APP/Contents/Resources/"
 printf 'APPL????' > "$APP/Contents/PkgInfo"
 
-swiftc -swift-version 5 -O -target arm64-apple-macosx13.0 \
+swiftc -swift-version 5 -strict-concurrency=complete -O -target arm64-apple-macosx13.0 \
     -framework Cocoa -framework InputMethodKit -framework Carbon -framework SwiftUI -framework Security \
     -o "$APP/Contents/MacOS/Ankey" \
     "$ROOT"/Core/*.swift "$ROOT"/App/*.swift

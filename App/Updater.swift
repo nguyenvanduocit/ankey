@@ -38,7 +38,7 @@ enum UpdateError: LocalizedError {
 }
 
 /// Checks GitHub Releases once a day and installs a newer build after the user agrees.
-final class Updater: ObservableObject {
+@MainActor final class Updater: ObservableObject {
     static let shared = Updater()
 
     enum State {
@@ -53,17 +53,17 @@ final class Updater: ObservableObject {
     @Published private(set) var state = State.idle
     @Published private(set) var lastCheck = UserDefaults.standard.object(forKey: lastCheckKey) as? Date
 
-    static var currentVersion: Version {
+    nonisolated static var currentVersion: Version {
         let text = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? ""
         return Version(text) ?? Version("0")!
     }
 
-    /// Call once at launch. The timer only runs a check when the last one is a day old.
+    /// Call once at launch. Launch always checks; the hourly timer only checks when the last one is a day old.
     func startScheduledChecks() {
         Timer.scheduledTimer(withTimeInterval: timerInterval, repeats: true) { _ in
-            self.checkIfDue()
+            Task { @MainActor in self.checkIfDue() }
         }
-        checkIfDue()
+        check(userInitiated: false)
     }
 
     /// A background check keeps quiet on failure. A check the user asked for shows it.
@@ -87,7 +87,8 @@ final class Updater: ObservableObject {
     }
 
     /// Replaces the running app with the release, then quits so macOS starts the new build.
-    func install() {
+    /// `onFailure` runs on the main actor with the error text, for callers that have no status row to show it.
+    func install(onFailure: @escaping @MainActor (String) -> Void = { _ in }) {
         guard case .available(let release) = state else { return }
         state = .installing
         Task {
@@ -96,6 +97,7 @@ final class Updater: ObservableObject {
                 DispatchQueue.main.async { exit(0) }
             } catch {
                 await publish(.failed(error.localizedDescription))
+                onFailure(error.localizedDescription)
             }
         }
     }
@@ -114,7 +116,7 @@ final class Updater: ObservableObject {
 
     // MARK: Network
 
-    private static func fetchLatest() async throws -> ReleaseInfo {
+    private nonisolated static func fetchLatest() async throws -> ReleaseInfo {
         guard !releaseRepo.isEmpty else { throw UpdateError.noRelease }
         let url = URL(string: "https://api.github.com/repos/\(releaseRepo)/releases/latest")!
         var request = URLRequest(url: url, timeoutInterval: 15)
@@ -131,7 +133,7 @@ final class Updater: ObservableObject {
     // MARK: Install
 
     /// Every check runs on a copy in a temp directory. The installed app is replaced last.
-    private static func install(_ release: ReleaseInfo) async throws {
+    private nonisolated static func install(_ release: ReleaseInfo) async throws {
         let fileManager = FileManager.default
         let installed = Bundle.main.bundleURL
         guard fileManager.isWritableFile(atPath: installed.deletingLastPathComponent().path) else {
@@ -169,7 +171,7 @@ final class Updater: ObservableObject {
         _ = try fileManager.replaceItemAt(installed, withItemAt: newApp)
     }
 
-    private static func unzip(_ zip: URL, into directory: URL) throws {
+    private nonisolated static func unzip(_ zip: URL, into directory: URL) throws {
         let ditto = Process()
         ditto.executableURL = URL(fileURLWithPath: "/usr/bin/ditto")
         ditto.arguments = ["-x", "-k", zip.path, directory.path]
@@ -179,7 +181,7 @@ final class Updater: ObservableObject {
     }
 
     /// The Apple team that signed the running app. Nil for an ad-hoc or unsigned build.
-    private static func ownTeamID() -> String? {
+    private nonisolated static func ownTeamID() -> String? {
         var running: SecCode?
         var code: SecStaticCode?
         var info: CFDictionary?
@@ -191,7 +193,7 @@ final class Updater: ObservableObject {
     }
 
     /// An update must carry the Developer ID signature of the team that signed the running app.
-    private static func verifySignature(of app: URL) throws {
+    private nonisolated static func verifySignature(of app: URL) throws {
         guard let team = ownTeamID() else { throw UpdateError.unsignedBuild }
         var code: SecStaticCode?
         var requirement: SecRequirement?

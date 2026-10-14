@@ -202,7 +202,7 @@ struct AppsTab: View {
                 onPick: add,
                 onBrowse: {
                     showPicker = false
-                    DispatchQueue.main.async(execute: browse)
+                    DispatchQueue.main.async { browse() }
                 },
                 onClose: { showPicker = false }
             )

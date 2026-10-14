@@ -38,7 +38,7 @@ struct PixelAlertView: View {
 }
 
 /// Shows a pixel alert and blocks until a button is pressed. Returns that button's index.
-@discardableResult
+@MainActor @discardableResult
 func runPixelAlert(title: String, message: String, buttons: [String]) -> Int {
     var choice = 0
     let host = NSHostingController(rootView: PixelAlertView(title: title, message: message, buttons: buttons) { index in

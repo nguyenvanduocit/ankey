@@ -18,7 +18,7 @@ struct UpdatesTab: View {
         PixelPage {
             PixelSection(
                 title: "Cập nhật",
-                footer: "Ankey tự kiểm tra mỗi ngày một lần và chỉ cài khi bạn bấm Cập nhật."
+                footer: "Ankey tự kiểm tra khi mở và mỗi ngày một lần, chỉ cài khi bạn bấm Cập nhật."
             ) {
                 row("Phiên bản hiện tại", Updater.currentVersion.text)
                 row("Kiểm tra lần cuối", lastCheckText)

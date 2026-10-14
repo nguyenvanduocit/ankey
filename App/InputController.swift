@@ -144,15 +144,21 @@ final class AnkeyInputController: IMKInputController {
         let settings = NSMenuItem(title: "Cài đặt…", action: #selector(showSettings(_:)), keyEquivalent: ",")
         settings.target = self
         menu.addItem(settings)
-        if case .available(let release) = Updater.shared.state {
+        // IMK builds the menu on the main thread.
+        switch MainActor.assumeIsolated({ Updater.shared.state }) {
+        case .available(let release):
             let update = NSMenuItem(title: "Cập nhật lên \(release.version.text)…", action: #selector(confirmUpdate(_:)), keyEquivalent: "")
             update.target = self
             menu.addItem(update)
+        case .installing:
+            menu.addItem(NSMenuItem(title: "Đang cập nhật…", action: nil, keyEquivalent: ""))
+        default:
+            break
         }
         return menu
     }
 
-    @objc private func confirmUpdate(_ sender: Any?) {
+    @MainActor @objc private func confirmUpdate(_ sender: Any?) {
         guard case .available(let release) = Updater.shared.state else { return }
         NSApp.activate(ignoringOtherApps: true)
         let choice = runPixelAlert(
@@ -161,15 +167,17 @@ final class AnkeyInputController: IMKInputController {
             buttons: ["Cập nhật", "Để sau"]
         )
         if choice == 0 {
-            Updater.shared.install()
+            Updater.shared.install { message in
+                runPixelAlert(title: "Không cập nhật được", message: message, buttons: ["Đóng"])
+            }
         }
     }
 
-    @objc private func showSettings(_ sender: Any?) {
+    @MainActor @objc private func showSettings(_ sender: Any?) {
         SettingsWindowController.shared.show()
     }
 
-    private static var jokeIndex = 0
+    @MainActor private static var jokeIndex = 0
     private static let jokes: [(title: String, body: String, button: String)] = [
         (
             "VNI à? Ở đây chỉ có Telex.",
@@ -198,7 +206,7 @@ final class AnkeyInputController: IMKInputController {
         ),
     ]
 
-    @objc private func showVNIJoke(_ sender: Any?) {
+    @MainActor @objc private func showVNIJoke(_ sender: Any?) {
         let joke = Self.jokes[Self.jokeIndex % Self.jokes.count]
         Self.jokeIndex += 1
         NSApp.activate(ignoringOtherApps: true)
