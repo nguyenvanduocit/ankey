@@ -913,6 +913,32 @@ func checkStatsUpload() {
     upload(today + 5 * day)
     expect(sender.batches.count, 2, "sharing off sends nothing")
 }
+func checkOnboarding() {
+    let suite = "ankey.tests.onboarding.\(UUID().uuidString)"
+    let defaults = UserDefaults(suiteName: suite)!
+    defer { defaults.removePersistentDomain(forName: suite) }
+
+    expect(Settings().onboardingSeen, false, "guide not seen by default")
+    expect(Settings.load(from: defaults).onboardingSeen, false, "fresh defaults: not seen")
+    Settings.markOnboardingSeen(in: defaults)
+    expect(Settings.load(from: defaults).onboardingSeen, true, "marking is read back")
+    expect(defaults.dictionaryRepresentation().keys.filter { $0.hasPrefix("onboarding") }.count, 1, "marking writes the one key")
+    var settings = Settings.load(from: defaults)
+    settings.onboardingSeen = false
+    settings.save(to: defaults)
+    expect(Settings.load(from: defaults).onboardingSeen, false, "flag round trip")
+
+    expect(Onboarding.opensAtLaunch(seen: false, hadStoredValues: false), true, "fresh install opens the guide")
+    expect(Onboarding.opensAtLaunch(seen: true, hadStoredValues: false), false, "seen once is enough")
+    expect(Onboarding.opensAtLaunch(seen: false, hadStoredValues: true), false, "an update does not interrupt")
+    expect(Onboarding.opensAtLaunch(seen: true, hadStoredValues: true), false, "seen update stays quiet")
+
+    expect(InputSourceStatus(enabledFlags: []), .notListed, "no source listed")
+    expect(InputSourceStatus(enabledFlags: [false]), .disabled, "listed and off")
+    expect(InputSourceStatus(enabledFlags: [true]), .enabled, "listed and on")
+    expect(InputSourceStatus(enabledFlags: [false, true]), .enabled, "any source on counts")
+}
+
 
 @main
 struct TestRunner {
@@ -925,6 +951,7 @@ struct TestRunner {
         checkEncoding()
         checkStats()
         checkStatsUpload()
+        checkOnboarding()
         checkTriggers()
         checkSlashTyping()
         checkCapture()

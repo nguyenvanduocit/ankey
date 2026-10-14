@@ -19,6 +19,13 @@ _ = AnkeyInputController.self
 ankeyServer = IMKServer(name: connectionName, bundleIdentifier: Bundle.main.bundleIdentifier)
 // The syllable index takes about 20 ms to build. Build it now so the first keystroke does not wait.
 _ = Engine.render("as")
+// The guide opens once, on a fresh install. Read the stored values before anything below writes one.
+let hadStoredValues = !(UserDefaults.standard.persistentDomain(forName: Bundle.main.bundleIdentifier ?? "")?.isEmpty ?? true)
+let opensGuide = Onboarding.opensAtLaunch(seen: Settings.load().onboardingSeen, hadStoredValues: hadStoredValues)
+Settings.markOnboardingSeen()
+if opensGuide {
+    Task { @MainActor in OnboardingWindowController.shared.show() }
+}
 Updater.shared.startScheduledChecks()
 StatsSchedule.start()
 _ = NSApplicationMain(CommandLine.argc, CommandLine.unsafeArgv)

@@ -141,6 +141,8 @@ struct Settings: Equatable {
     var collectStats = false
     /// Sends the counters to Datadog once a day. Needs `collectStats`, off until the user turns it on.
     var shareStats = false
+    /// The guide has had its first showing. It stays in the input menu after that.
+    var onboardingSeen = false
 }
 
 extension Settings {
@@ -157,6 +159,12 @@ extension Settings {
         static let excludedApps = "excludedApps"
         static let collectStats = "collectStats"
         static let shareStats = "shareStats"
+        static let onboardingSeen = "onboardingSeen"
+    }
+
+    /// Writes only this flag, so the first launch does not save every other default with it.
+    static func markOnboardingSeen(in defaults: UserDefaults = .standard) {
+        defaults.set(true, forKey: Key.onboardingSeen)
     }
 
     /// One bool read, so the key path can ask before it counts anything.
@@ -188,6 +196,7 @@ extension Settings {
         settings.escClears = defaults.object(forKey: Key.escClears) as? Bool ?? settings.escClears
         settings.collectStats = collectsStats(in: defaults)
         settings.shareStats = settings.collectStats && defaults.bool(forKey: Key.shareStats)
+        settings.onboardingSeen = defaults.bool(forKey: Key.onboardingSeen)
         if let rows = defaults.array(forKey: Key.macros) as? [[String: String]] {
             let macros = rows.compactMap { row -> Macro? in
                 guard let shortcut = row["shortcut"], let text = row["text"] else { return nil }
@@ -217,6 +226,7 @@ extension Settings {
         defaults.set(escClears, forKey: Key.escClears)
         defaults.set(collectStats, forKey: Key.collectStats)
         defaults.set(shareStats, forKey: Key.shareStats)
+        defaults.set(onboardingSeen, forKey: Key.onboardingSeen)
         defaults.set(encoding.rawValue, forKey: Key.encoding)
         defaults.set(macros.map { ["shortcut": $0.shortcut, "text": $0.text] }, forKey: Key.macros)
         defaults.set(shorthand, forKey: Key.shorthand)
