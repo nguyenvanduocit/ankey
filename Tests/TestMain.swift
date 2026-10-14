@@ -599,8 +599,13 @@ func typeLine(_ line: String, _ settings: Settings = Settings()) -> String {
     var session = Session()
     var document = ""
     for ch in line {
-        switch session.push(ch) {
-        case .consumed: break
+        var answer = session.push(ch)
+        if answer == .flush {
+            document += session.finish(settings, expand: false)
+            answer = session.push(ch)
+        }
+        switch answer {
+        case .consumed, .flush, .cheat: break
         case .pass: document.append(ch)
         case .commit:
             document += session.finish(settings, expand: true)
@@ -920,6 +925,10 @@ struct TestRunner {
         checkEncoding()
         checkStats()
         checkStatsUpload()
+        checkTriggers()
+        checkSlashTyping()
+        checkCapture()
+        checkFeedbackEvent()
         checkRelease()
         checkLoadTiming()
         checkExpansion()

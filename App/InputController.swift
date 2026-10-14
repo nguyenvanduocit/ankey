@@ -46,6 +46,7 @@ final class AnkeyInputController: IMKInputController {
         default:
             return false
         }
+        if MainActor.assumeIsolated({ FeedbackFlow.shared.isActive }) { return captureKey(event, sender) }
         if !event.modifierFlags.isDisjoint(with: [.command, .control]) {
             leaveWord(sender)
             return false
@@ -88,6 +89,13 @@ final class AnkeyInputController: IMKInputController {
         case .commit:
             commit(sender, ctx, expand: true)
             return false
+        case .flush:
+            commit(sender, ctx, expand: false)
+            return inputText(string, client: sender)
+        case .cheat(let trigger):
+            refresh(sender, ctx)
+            MainActor.assumeIsolated { FeedbackFlow.shared.start(trigger, settings: ctx.settings) }
+            return true
         }
     }
 
@@ -101,6 +109,10 @@ final class AnkeyInputController: IMKInputController {
         }
         if name == "cancelOperation:" {
             guard session.isComposing else { return false }
+            if session.isHolding {
+                commit(sender, ctx, expand: false)
+                return false
+            }
             if session.display(ctx.settings) != session.raw {
                 StatsStore.record(.escRestoredRaw)
                 finalize(session.finishRaw(), sender, ctx)
@@ -130,6 +142,7 @@ final class AnkeyInputController: IMKInputController {
     }
 
     override func deactivateServer(_ sender: Any!) {
+        endCapture()
         commit(sender, context(sender), expand: false)
         session.forgetContext()
     }
@@ -174,6 +187,7 @@ final class AnkeyInputController: IMKInputController {
 
     /// The caret may now sit anywhere, so the words typed before say nothing about the next one.
     private func leaveWord(_ sender: Any!) {
+        endCapture()
         commit(sender, context(sender), expand: false)
         session.forgetContext()
     }
@@ -230,5 +244,33 @@ final class AnkeyInputController: IMKInputController {
     private func textClient(_ sender: Any!) -> (any IMKTextInput)? {
         if let client = sender as? any IMKTextInput { return client }
         return client()
+    }
+}
+
+// MARK: - Feedback capture
+
+extension AnkeyInputController {
+    /// A report is open: every key belongs to it, so none reaches the app.
+    private func captureKey(_ event: NSEvent, _ sender: Any!) -> Bool {
+        if !event.modifierFlags.isDisjoint(with: [.command, .control]) {
+            leaveWord(sender)
+            return false
+        }
+        let ctx = context(sender)
+        let keyCode = event.keyCode
+        let characters = event.characters
+        MainActor.assumeIsolated {
+            FeedbackFlow.shared.key(
+                keyCode,
+                characters: characters,
+                settings: ctx.settings,
+                context: .current(encoding: ctx.encoding, mode: ctx.rule.mode)
+            )
+        }
+        return true
+    }
+
+    private func endCapture() {
+        MainActor.assumeIsolated { FeedbackFlow.shared.cancel() }
     }
 }

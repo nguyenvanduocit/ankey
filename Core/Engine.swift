@@ -1,16 +1,26 @@
 import Foundation
 
-enum Push {
+enum Push: Equatable {
     /// Key joined the current syllable. Show it as marked text.
     case consumed
     /// Nothing is being composed. The app should receive the key.
     case pass
     /// Finish the syllable, then let the key through (space, punctuation).
     case commit
+    /// The held start of a cheat code cannot grow with this key. Commit the held text,
+    /// then push the same key again.
+    case flush
+    /// The held text is a complete cheat code. It is gone from the session; the caller clears what it showed.
+    case cheat(Trigger)
 }
 
 struct Session {
     private(set) var raw = ""
+    /// A `/` at the start of a word is held as typed while it can still become a cheat code (`///bug`).
+    /// It is never run through Telex.
+    private var held = ""
+    /// Capture sessions turn this off: inside a report `///bug` is plain text.
+    var detectsTriggers = true
     /// The language of the last finished word that showed one. Ambiguous words follow it.
     private var previous: Language?
     private var endsSentence = false
@@ -25,10 +35,13 @@ struct Session {
     /// prose are here: `/` (và/hoặc), brackets (`[hoàn thành]`) and `*` (bold) also appear in Vietnamese.
     private static let glue: Set<Character> = ["_", "@", "\\", "=", "|", "&", "$", "^", "~"]
 
-    var isComposing: Bool { !raw.isEmpty }
+    var isComposing: Bool { !raw.isEmpty || isHolding }
+
+    /// The pending text is the start of a cheat code, not a word.
+    var isHolding: Bool { !held.isEmpty }
 
     func display(_ settings: Settings) -> String {
-        Engine.render(raw, settings, after: previous, glued: glued)
+        isHolding ? held : Engine.render(raw, settings, after: previous, glued: glued)
     }
 
     /// A dot glues words in `foo.bar` and `README.md`, not after Vietnamese (`ừm...tôi`).
@@ -57,13 +70,15 @@ struct Session {
         }
         endsSentence = false
         raw = ""
+        held = ""
         return text
     }
 
     /// The typed keys as they are. The word counts as English from here on.
     mutating func finishRaw() -> String {
-        let text = raw
+        let text = isHolding ? held : raw
         raw = ""
+        held = ""
         previous = .english
         endsSentence = false
         glued = false
@@ -79,6 +94,11 @@ struct Session {
     }
 
     mutating func push(_ ch: Character) -> Push {
+        if isHolding { return pushHeld(ch) }
+        if detectsTriggers, raw.isEmpty, ch == "/" {
+            held = "/"
+            return .consumed
+        }
         if Engine.isComposing(ch) {
             raw.append(ch)
             return .consumed
@@ -95,7 +115,22 @@ struct Session {
         return .commit
     }
 
+    private mutating func pushHeld(_ ch: Character) -> Push {
+        let typed = held + String(ch)
+        guard Trigger.canStart(typed) else { return .flush }
+        if let trigger = Trigger(typed: typed) {
+            held = ""
+            return .cheat(trigger)
+        }
+        held = typed
+        return .consumed
+    }
+
     mutating func pop() -> Bool {
+        if isHolding {
+            held.removeLast()
+            return true
+        }
         guard !raw.isEmpty else { return false }
         raw.removeLast()
         return true
@@ -103,6 +138,7 @@ struct Session {
 
     mutating func clear() {
         raw = ""
+        held = ""
     }
 }
 
