@@ -75,6 +75,7 @@ struct Session {
     mutating func forgetContext() {
         previous = nil
         glued = false
+        afterVietnamese = false
     }
 
     mutating func push(_ ch: Character) -> Push {

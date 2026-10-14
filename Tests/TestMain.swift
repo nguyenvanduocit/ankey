@@ -573,6 +573,18 @@ func checkContext() {
     _ = typed(&session, "commit")
     session.forgetContext()
     expect(typed(&session, "as"), "\u{00e1}", "as after forgetContext")
+    // A dot after forgetContext glues the next word like in a fresh session, whatever came before.
+    func afterDot(_ session: inout Session) -> String {
+        for ch in ".baf" { _ = session.push(ch) }
+        return session.display(s)
+    }
+    var forgotten = Session()
+    for ch in "xinf" { _ = forgotten.push(ch) }
+    _ = forgotten.push(" ")
+    _ = forgotten.finish(s, expand: false)
+    forgotten.forgetContext()
+    var fresh = Session()
+    expect(afterDot(&forgotten), afterDot(&fresh), "forgetContext matches a fresh session")
     // A macro says nothing about the language.
     var macro = s
     macro.macros = [Macro(shortcut: "vn", text: "vi\u{1ec7}t nam")]
