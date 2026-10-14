@@ -1,109 +1,71 @@
 # Ankey
 
-![Ankey: Telex Vietnamese input for macOS](.github/social-preview.png)
+![Ankey: bộ gõ Telex cho macOS](.github/social-preview.png)
 
-Ankey lets you type Vietnamese on your Mac using Telex. It also knows when you are typing English, so words like `smart`, `text` and `hello` stay exactly as you typed them.
+Bộ gõ Telex cho macOS, biết lúc nào bạn không gõ tiếng Việt. `smart`, `text`, `hello` ra đúng như gõ. `does` vẫn là `does`, không thành `doé`. `cảm own` vẫn ra `cảm ơn`. Không cần phím chuyển, không cần escape từng từ.
 
-- **Type Vietnamese the usual Telex way.** `aa` gives `â`, `dd` gives `đ`, and `s f r x j` add the tone marks.
-- **Mix Vietnamese and English freely.** No need to switch back and forth. Ankey only adds marks to words that really exist in Vietnamese.
-- **Shortcuts for text you type often.** Type a short code, press space, and the full text appears.
-- **Turn it off in certain apps.** For example, you can keep Ankey out of Terminal.
-- **Updates itself.** When a new version is out, Ankey tells you and installs it with one click.
+Chạy trên Apple silicon, macOS 13 trở lên. Không dùng thư viện bên thứ ba. Phần lõi khoảng 1.300 dòng Swift.
 
-Works on Macs with Apple silicon (M1 or newer) running macOS 13 or later. The settings window is in Vietnamese.
+## Cài đặt
 
-## Install
+```
+curl -fsSL https://raw.githubusercontent.com/nguyenvanduocit/ankey/main/install.sh | sh
+```
 
-1. Open **Terminal** (press ⌘ Space, type "Terminal", press Return).
-2. Copy this line, paste it into Terminal and press Return:
+Đăng xuất rồi đăng nhập lại, sau đó thêm **Ankey** ở System Settings → Keyboard → Input Sources → Edit… → **+** → Vietnamese. Muốn cài tay thì giải nén [bản release mới nhất](../../releases/latest) vào `~/Library/Input Methods/`.
 
-   ```
-   curl -fsSL https://raw.githubusercontent.com/nguyenvanduocit/ankey/main/install.sh | sh
-   ```
+## Phân biệt tiếng Anh và tiếng Việt thế nào
 
-3. **Log out of your Mac and log back in.** macOS only shows a new keyboard after that.
-4. Open **System Settings → Keyboard → Input Sources → Edit… → +**, choose **Vietnamese**, then **Ankey**.
-5. Click the input-source icon in the menu bar at the top of the screen and pick **Ankey**.
+Chỉ dùng luật Telex thì không làm được. Luật Telex vui vẻ biến `test` thành `tét`, `does` thành `doé`, vì cả hai đều hợp lệ theo luật. Ankey chồng thêm ba lớp kiểm tra.
 
-Prefer not to use Terminal? Download the latest `Ankey-X.Y.Z.zip` from the [Releases page](../../releases/latest), unzip it, and drag `Ankey.app` into the folder `~/Library/Input Methods/`. Then continue from step 3.
+**1. Một từ phải là tiền tố của một âm tiết có thật trong tiếng Việt.** [`Syllables.swift`](Core/Syllables.swift) giữ các âm tiết đơn lấy từ Viet74K và hunspell-vi. Kết quả chuyển đổi chỉ được nhận khi nó còn là tiền tố của một âm tiết trong danh sách. `doé` qua được luật nhưng không có trong danh sách, nên từ đó giữ nguyên.
 
-## How to type
+**2. Từ tiếng Anh lọt qua lớp 1 có danh sách riêng.** Một số từ tiếng Anh sau khi Telex thêm dấu lại thành âm tiết hợp lệ (`reset` → `rết`, `test` → `tét`). [`English.swift`](Core/English.swift) tìm chúng bằng máy: lấy 20.000 từ tiếng Anh phổ biến nhất, giữ những từ engine sẽ chuyển đổi, rồi xếp hạng dạng đã chuyển theo độ phổ biến trong tiếng Việt (FrequencyWords, vi).
 
-| Type | You get | Type | You get |
-|---|---|---|---|
-| `aa` | â | `s` | sắc (á) |
-| `aw` | ă | `f` | huyền (à) |
-| `ee` | ê | `r` | hỏi (ả) |
-| `oo` | ô | `x` | ngã (ã) |
-| `ow` | ơ | `j` | nặng (ạ) |
-| `uw` | ư | `z` | remove the tone |
-| `dd` | đ | | |
-
-You can type the tone at the end of the word: `vieetj` gives `việt`, and `nguoiwf` gives `người`.
-
-**Made a mistake?**
-
-- **Backspace** removes the last key you pressed.
-- **Esc** brings back the letters you actually typed. If Ankey turned `test` into `tét`, press Esc to get `test` again.
-- **Press the same key once more** to cancel a mark: `aaa` gives `aa`, because the third `a` undoes the `â`.
-
-## Settings
-
-Click the Ankey icon in the menu bar and choose **Cài đặt…** (or press ⌘,). Changes take effect on the next key you press.
-
-| Tab | What it is for |
+| Hạng của dạng đã chuyển trong tiếng Việt | Kết quả |
 |---|---|
-| **Chung** | Where the tone mark goes (`hoà` or `hòa`), and what Esc does. |
-| **Gõ tắt** | Your shortcuts, your own abbreviations, and English words you want left alone. |
-| **Ứng dụng** | Choose how Ankey behaves in each app, or turn it off for that app. |
-| **Cập nhật** | Your current version, and a button to check for updates. |
+| Dưới 500 | Bỏ khỏi danh sách, tiếng Việt thắng: `cos` là `có`, `nos` là `nó`. |
+| 500 đến 8000 | Giữ tiếng Anh chỉ khi đứng ngay sau một từ tiếng Anh: `git commit as` giữ nguyên, `cảm own` chuyển thành `cảm ơn`. |
+| Từ 8000 trở lên, hoặc không có hạng | Luôn giữ tiếng Anh: `reset`, `boot`, `list`. |
 
-### Shortcuts
+**3. Từ đứng trước quyết định ngôn ngữ cho các từ nhập nhằng.** Ankey nhớ một từ gần nhất: bạn đang gõ tiếng Anh hay tiếng Việt. Trí nhớ này bị xoá khi gặp dấu chấm, `!`, `?`, Return, Tab, khi chuyển app, và khi con trỏ nhảy chỗ khác, vì lúc đó các từ gõ trước không còn nói gì về từ sắp gõ. Từ dính liền với dấu câu của code (`my_var`, `user@host`, `foo.bar(x)`) giữ nguyên, trừ khi đứng sau một từ tiếng Việt, nên `ừm...tôi` vẫn chuyển bình thường.
 
-In **Gõ tắt**, add a short code and the text it stands for. Later, type the code and press space (or Return, Tab, or any punctuation) and the full text appears.
+Các danh sách có sẵn nằm trong code, không nằm trong settings đã lưu. Nhờ vậy mỗi lần cập nhật đều cải thiện danh sách cho mọi người, kể cả người đã chỉnh settings riêng.
 
-For example, if you set `vn` to `việt nam`:
+## Render từ phím thô
 
-- `vn` gives `việt nam`
-- `Vn` gives `Việt nam`
-- `VN` gives `VIỆT NAM`
+Engine không bao giờ sửa chữ đang hiện trên màn hình. Nó giữ **các phím thô đã gõ từ lần ngắt từ gần nhất** và render lại cả từ sau mỗi phím. Undo, backspace và việc trả về tiếng Anh đều suy ra từ đó:
 
-Use letters a–z only for the code.
+- Backspace bỏ phím thô cuối rồi render lại.
+- `noww` ra `now` vì engine thấy đủ bốn phím, không phải một chữ `nô` đã chuyển dở.
+- Esc trả về phím thô. Nếu Ankey đã đổi `test` thành `tét`, một lần Esc cho lại `test`.
 
-### Abbreviations
+Vì thấy cả từ nên phím dấu không cần đúng thứ tự. `vieetj` và `vietej` đều ra `việt`. `duwocj` và `duocwj` đều ra `dược`. Phím mũ có thể đến sau các nguyên âm theo sau (`vayaj` → `vậy`, `toio` → `tôi`) hoặc sau phụ âm cuối. Phím dấu thanh nằm ngay trước phím mũ thì phá cặp, nên `verse` và `reference` giữ nguyên mọi chữ.
 
-Short forms like `đc` are not real Vietnamese words, so Ankey would normally leave `ddc` alone. Words in the abbreviation list still get their marks, so `ddc` becomes `đc`. `đc` is already there. Add more, such as `đt`.
+## Lõi thuần, vỏ mỏng
 
-### English words
+`Engine`, `Settings` và `Release` không làm I/O. Chúng chạy trong test mà không cần mock, và `build.sh` không build app cho tới khi các test đó qua. Mọi thứ nói chuyện với macOS (`IMKInputController`, menu, updater) là lớp vỏ mỏng bọc quanh lõi. Xem [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
-A few English words look like Vietnamese words once a tone is added. Without help, `test` would turn into `tét`. Ankey already handles the common ones, so most people never need to change anything:
+## Cập nhật đáng tin
 
-- Words such as `test`, `list`, `reset` and `boot` always stay English.
-- Words such as `as`, `car` and `last` stay English after an English word (`git commit as`) and turn Vietnamese after a Vietnamese word (`cảm own` becomes `cảm ơn`).
+Bộ gõ thấy từng phím bạn bấm, nên một bản cập nhật xấu chính là keylogger. Updater cài từ một bản sao trong thư mục tạm và dừng ở bước kiểm tra đầu tiên thất bại, app đang cài không bị đụng tới:
 
-If an English word of yours still gets changed, add it to **Từ tiếng Anh giữ nguyên** in Settings. You can also press Esc right after the word to get your letters back.
+1. SHA-256 của file zip so với checksum đã công bố.
+2. Chữ ký code so với yêu cầu `anchor apple generic and certificate leaf[subject.OU] = "694MCRBCD6"`.
+3. Bundle ID.
+4. Version so với tag của release.
 
-Code such as `my_var` or `user@host` is left alone automatically.
+Bản release được ký bằng Developer ID và notarize bởi CI từ tag. Xem [docs/RELEASING.md](docs/RELEASING.md).
 
-## Updates
-
-Ankey checks for a new version about once a day. When there is one, the menu shows **Cập nhật lên X.Y.Z…**. Click it to update.
-
-Every update is checked before it replaces your copy of Ankey, so a damaged or tampered download is rejected and your current version keeps working.
-
-## For developers
-
-You need the Xcode command line tools.
+## Build từ source
 
 ```
-./build.sh             # run the tests, then build and sign dist/Ankey.app
-./build.sh --install   # also install into ~/Library/Input Methods
+./build.sh             # chạy test của engine, build và ký dist/Ankey.app
+./build.sh --install   # build xong cài luôn vào ~/Library/Input Methods
 ```
 
-The build stops if a test fails. It signs with the first Developer ID Application identity in your keychain; set `SIGN_IDENTITY=<hash or name>` to use another. Without any identity the app is signed ad-hoc: it runs on your own Mac but does not self-update.
+Chữ ký dùng Developer ID Application đầu tiên trong keychain; đặt `SIGN_IDENTITY=<hash hoặc tên>` để chọn cái khác. Không có identity nào thì app được ký ad-hoc: chạy được trên máy bạn nhưng không tự cập nhật. Fork muốn phát hành riêng thì đổi `AnkeyReleaseRepo` trong `Info.plist`.
 
-To publish your own releases from a fork, change `AnkeyReleaseRepo` in `Info.plist` to `owner/name`. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/RELEASING.md](docs/RELEASING.md).
+## Cảm ơn
 
-## Thanks
-
-Thanks to **FireGroup** for sponsoring the Apple Developer account that signs and notarizes Ankey. Without it, every release would trigger a security warning on your Mac.
+Cảm ơn **FireGroup** đã tài trợ tài khoản Apple Developer dùng để ký và notarize Ankey.
