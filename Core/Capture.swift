@@ -1,25 +1,41 @@
 import Foundation
 
-/// A cheat code typed at the start of a word. It switches Ankey from typing into the app to
-/// writing a report.
-enum Trigger: String, CaseIterable {
+/// What a report is about. Each kind has a cheat code of its own.
+enum ReportKind: String, CaseIterable {
     case bug, feedback
+}
+
+/// A cheat code typed at the start of a word. A report code opens a report; the settings code acts at once.
+enum Trigger: Equatable {
+    case report(ReportKind)
+    case settings
 
     static let prefix = "///"
 
-    var code: String { Self.prefix + rawValue }
+    /// Every cheat code. A new one is added here and nowhere else in the matcher.
+    static let all: [Trigger] = ReportKind.allCases.map(Trigger.report) + [.settings]
+
+    /// The name typed after the slashes.
+    var name: String {
+        switch self {
+        case .report(let kind): return kind.rawValue
+        case .settings: return "ankey"
+        }
+    }
+
+    var code: String { Self.prefix + name }
 
     /// Whether the typed text can still grow into a trigger.
     static func canStart(_ typed: String) -> Bool {
         let typed = typed.lowercased()
-        return allCases.contains { $0.code.hasPrefix(typed) }
+        return all.contains { $0.code.hasPrefix(typed) }
     }
 
     /// The trigger whose code is exactly the typed text.
     init?(typed: String) {
         let typed = typed.lowercased()
-        guard typed.hasPrefix(Self.prefix) else { return nil }
-        self.init(rawValue: String(typed.dropFirst(Self.prefix.count)))
+        guard let match = Self.all.first(where: { $0.code == typed }) else { return nil }
+        self = match
     }
 }
 
@@ -32,14 +48,14 @@ struct FeedbackContext: Equatable {
 }
 
 struct FeedbackReport: Equatable {
-    var trigger: Trigger
+    var kind: ReportKind
     var text: String
     var context: FeedbackContext
 
     /// The one log line a report becomes. The typed text sits in `feedbackText` and nowhere else.
     /// `TestMain` pins every attribute, so adding a field fails the tests until that list changes with it.
     var event: LogEvent {
-        LogEvent(message: "ankey.feedback.\(trigger.rawValue)", attributes: [
+        LogEvent(message: "ankey.feedback.\(kind.rawValue)", attributes: [
             "feedbackText": .string(text),
             "macOS": .string(context.macOS),
             "chip": .string(context.chip),
@@ -70,14 +86,14 @@ struct Capture {
 
     static let limit = 1000
 
-    let trigger: Trigger
+    let kind: ReportKind
     private(set) var phase = Phase.typing
     /// Finished words and the keys between them.
     private var done = ""
     private var word = Session()
 
-    init(_ trigger: Trigger) {
-        self.trigger = trigger
+    init(_ kind: ReportKind) {
+        self.kind = kind
         word.detectsTriggers = false
     }
 
@@ -118,7 +134,7 @@ struct Capture {
         let text = done.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return nil }
         phase = .sending
-        return FeedbackReport(trigger: trigger, text: text, context: context)
+        return FeedbackReport(kind: kind, text: text, context: context)
     }
 
     /// The send did not go out. The text stays so the user can try again.

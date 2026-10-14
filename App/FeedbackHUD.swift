@@ -3,7 +3,7 @@ import SwiftUI
 
 /// What the HUD shows. The capture states follow `Capture`; the rest are short notices.
 enum HUDState: Equatable {
-    case capture(Trigger, text: String, phase: Capture.Phase)
+    case capture(ReportKind, text: String, phase: Capture.Phase)
     case sent
     /// The build has nowhere to send a report, so no capture starts.
     case unavailable
@@ -26,7 +26,7 @@ final class HUDModel: ObservableObject {
     @Published var state = HUDState.sent
 }
 
-private extension Trigger {
+private extension ReportKind {
     var title: String {
         switch self {
         case .bug: return "Báo lỗi"
@@ -45,8 +45,8 @@ struct FeedbackHUDView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 3 * Pixel.unit) {
             switch model.state {
-            case .capture(let trigger, let text, let phase):
-                capture(trigger, text, phase)
+            case .capture(let kind, let text, let phase):
+                capture(kind, text, phase)
             case .sent:
                 Text("✓ Đã gửi. Cảm ơn bạn!").foregroundStyle(Pixel.accent)
             case .unavailable:
@@ -66,10 +66,10 @@ struct FeedbackHUDView: View {
     }
 
     @ViewBuilder
-    private func capture(_ trigger: Trigger, _ text: String, _ phase: Capture.Phase) -> some View {
+    private func capture(_ kind: ReportKind, _ text: String, _ phase: Capture.Phase) -> some View {
         HStack {
-            Text(trigger.code).foregroundStyle(Pixel.gold)
-            Text(trigger.title).foregroundStyle(Pixel.muted)
+            Text(Trigger.report(kind).code).foregroundStyle(Pixel.gold)
+            Text(kind.title).foregroundStyle(Pixel.muted)
             Spacer(minLength: 0)
             Text(verbatim: "\(text.count)/\(Capture.limit)").foregroundStyle(Pixel.muted)
         }

@@ -20,12 +20,12 @@ final class FeedbackFlow {
 
     /// The cheat code was typed. Without a place to send a report the user hears so at once,
     /// instead of writing one that cannot go anywhere.
-    func start(_ trigger: Trigger, settings: Settings) {
+    func start(_ kind: ReportKind, settings: Settings) {
         guard sender.isConfigured else {
             hud.show(.unavailable)
             return
         }
-        capture = Capture(trigger)
+        capture = Capture(kind)
         render(settings)
     }
 
@@ -91,6 +91,6 @@ final class FeedbackFlow {
 
     private func render(_ settings: Settings) {
         guard let capture else { return }
-        hud.show(.capture(capture.trigger, text: capture.display(settings), phase: capture.phase))
+        hud.show(.capture(capture.kind, text: capture.display(settings), phase: capture.phase))
     }
 }

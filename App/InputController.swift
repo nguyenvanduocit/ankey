@@ -94,7 +94,12 @@ final class AnkeyInputController: IMKInputController {
             return inputText(string, client: sender)
         case .cheat(let trigger):
             refresh(sender, ctx)
-            MainActor.assumeIsolated { FeedbackFlow.shared.start(trigger, settings: ctx.settings) }
+            switch trigger {
+            case .report(let kind):
+                MainActor.assumeIsolated { FeedbackFlow.shared.start(kind, settings: ctx.settings) }
+            case .settings:
+                showSettings(nil)
+            }
             return true
         }
     }
@@ -181,8 +186,9 @@ final class AnkeyInputController: IMKInputController {
         }
     }
 
-    @MainActor @objc private func showSettings(_ sender: Any?) {
-        SettingsWindowController.shared.show()
+    /// The menu item and the `///ankey` code both open Settings here. IMK and AppKit call on the main thread.
+    @objc private func showSettings(_ sender: Any?) {
+        MainActor.assumeIsolated { SettingsWindowController.shared.show() }
     }
 
     /// The caret may now sit anywhere, so the words typed before say nothing about the next one.

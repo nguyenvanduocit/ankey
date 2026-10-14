@@ -10,7 +10,7 @@ private func type(_ keys: String, into session: inout Session) -> Push {
 
 private let context = FeedbackContext(macOS: "26.4", chip: "Apple M1", encoding: .tcvn3, mode: .direct)
 
-private func typed(_ keys: String, _ settings: Settings = Settings(), kind: Trigger = .feedback) -> Capture {
+private func typed(_ keys: String, _ settings: Settings = Settings(), kind: ReportKind = .feedback) -> Capture {
     var capture = Capture(kind)
     for ch in keys { capture.push(ch, settings) }
     return capture
@@ -18,17 +18,21 @@ private func typed(_ keys: String, _ settings: Settings = Settings(), kind: Trig
 
 func checkTriggers() {
     // The code is `///` plus a name, and it can still grow while the typed text is a prefix.
-    expect(Trigger.bug.code, "///bug", "bug code")
-    expect(Trigger.feedback.code, "///feedback", "feedback code")
-    for text in ["/", "//", "///", "///b", "///bu", "///f", "///feedbac", "///BUG", "///Feed"] {
+    expect(Trigger.all.map(\.code), ["///bug", "///feedback", "///ankey"], "every code is in the one list")
+    expect(Trigger.report(.bug).code, "///bug", "bug code")
+    expect(Trigger.report(.feedback).code, "///feedback", "feedback code")
+    expect(Trigger.settings.code, "///ankey", "settings code")
+    for text in ["/", "//", "///", "///b", "///bu", "///f", "///feedbac", "///BUG", "///Feed", "///a", "///ank", "///anke", "///ankey", "///ANK"] {
         expect(Trigger.canStart(text), true, "\(text) can still become a trigger")
     }
-    for text in ["a", "////", "///x", "///bugs", "//b", "/ /"] {
+    for text in ["a", "////", "///x", "///bugs", "//b", "/ /", "///ankeyx", "///ankex", "///ankey ", "///ak"] {
         expect(Trigger.canStart(text), false, "\(text) cannot become a trigger")
     }
-    expect(Trigger(typed: "///bug"), .bug, "exact bug")
-    expect(Trigger(typed: "///Feedback"), .feedback, "case does not matter")
-    for text in ["///", "///fee", "///bugs", "//bug", "bug", "///bug "] {
+    expect(Trigger(typed: "///bug"), .report(.bug), "exact bug")
+    expect(Trigger(typed: "///Feedback"), .report(.feedback), "case does not matter")
+    expect(Trigger(typed: "///ankey"), .settings, "exact settings")
+    expect(Trigger(typed: "///ANKEY"), .settings, "settings ignores case")
+    for text in ["///", "///fee", "///bugs", "//bug", "bug", "///bug ", "///ank", "///ankeyx", "ankey"] {
         expect(Trigger(typed: text), nil, "\(text) is not a trigger")
     }
 
@@ -38,7 +42,7 @@ func checkTriggers() {
     expect(session.display(Settings()), "///bu", "held text shows as typed")
     expect(session.isComposing, true, "held text counts as composing")
     expect(session.isHolding, true, "held text is holding")
-    expect(session.push("g"), .cheat(.bug), "last letter activates")
+    expect(session.push("g"), .cheat(.report(.bug)), "last letter activates")
     expect(session.isComposing, false, "activation leaves nothing pending")
     expect(session.display(Settings()), "", "activation leaves nothing to show")
     expect(session.push("a"), .consumed, "the next key starts a normal word")
@@ -47,7 +51,28 @@ func checkTriggers() {
     session = Session()
     expect(type("///fee", into: &session), .consumed, "feedback prefix is held")
     expect(session.display(Settings()), "///fee", "held text ignores Telex")
-    expect(type("dback", into: &session), .cheat(.feedback), "feedback activates on its last letter")
+    expect(type("dback", into: &session), .cheat(.report(.feedback)), "feedback activates on its last letter")
+
+    // `///ankey` is an instant action: the held text is gone and the caller opens Settings.
+    session = Session()
+    expect(type("///ank", into: &session), .consumed, "settings prefix is held")
+    expect(session.display(Settings()), "///ank", "settings prefix shows as typed")
+    expect(session.isHolding, true, "settings prefix is holding")
+    expect(type("ey", into: &session), .cheat(.settings), "last letter opens settings")
+    expect(session.isComposing, false, "opening settings leaves nothing pending")
+    expect(session.display(Settings()), "", "opening settings leaves nothing to show")
+
+    // The code fires on its last letter, so a letter after it starts a new word.
+    session = Session()
+    expect(type("///ankey", into: &session), .cheat(.settings), "settings fires on y")
+    expect(session.push("x"), .consumed, "the next letter starts a word")
+    expect(session.display(Settings()), "x", "that word is not held")
+
+    // A near miss flushes as typed.
+    session = Session()
+    type("///anke", into: &session)
+    expect(session.push("x"), .flush, "a wrong letter after ///anke flushes")
+    expect(session.finish(Settings(), expand: false), "///anke", "the prefix commits as typed")
 
     // A key that cannot extend the code flushes the held text. The caller commits it and pushes the key again.
     session = Session()
@@ -142,7 +167,7 @@ func checkCapture() {
     capture = typed("  vieetj nam  ", kind: .bug)
     expect(capture.phase, .typing, "typing before submit")
     let report = capture.submit(plain, context: context)
-    expect(report, FeedbackReport(trigger: .bug, text: "vi\u{1ec7}t nam", context: context), "report carries kind, text and context")
+    expect(report, FeedbackReport(kind: .bug, text: "vi\u{1ec7}t nam", context: context), "report carries kind, text and context")
     expect(capture.phase, .sending, "sending after submit")
     expect(capture.submit(plain, context: context), nil, "no second submit while sending")
     capture.push("x", plain)
@@ -171,11 +196,11 @@ func checkCapture() {
 /// The feedback event carries the typed text, macOS, chip, encoding and mode, and nothing else.
 func checkFeedbackEvent() {
     let report = FeedbackReport(
-        trigger: .bug, text: "g\u{00f5} \u{0111}\u{01b0}\u{1ee3}c r\u{1ed3}i m\u{1ea5}t ch\u{1eef}", context: context
+        kind: .bug, text: "g\u{00f5} \u{0111}\u{01b0}\u{1ee3}c r\u{1ed3}i m\u{1ea5}t ch\u{1eef}", context: context
     )
     let event = report.event
     expect(event.message, "ankey.feedback.bug", "message names the kind")
-    expect(FeedbackReport(trigger: .feedback, text: "x", context: context).event.message, "ankey.feedback.feedback", "feedback message")
+    expect(FeedbackReport(kind: .feedback, text: "x", context: context).event.message, "ankey.feedback.feedback", "feedback message")
     expect(Set(event.attributes.keys), [
         "feedbackText", "macOS", "chip", "encoding", "mode",
     ], "feedback attributes are the allowlist")
@@ -207,9 +232,13 @@ func checkSlashTyping() {
     for line in [
         "a//b", "http://x.com/y", "// comment", "/path/to/file", "/// doc comment", "hoang/nam",
         "////bug", "a///bug", "//bug", "///bu x", "file:///tmp", "/", "//", "///", "c:/ok",
+        "a///ankey", "//ankey", "////ankey", "///ank x", "///ankex", "ankey///",
     ] {
         expect(typeLine(line), line, "slash line \(line)")
     }
     expect(typeLine("///bug"), "", "trigger leaves nothing in the document")
     expect(typeLine("x ///feedback"), "x ", "text before the trigger stays")
+    expect(typeLine("///ankey"), "", "the settings code leaves nothing in the document")
+    expect(typeLine("x ///ankey"), "x ", "text before the settings code stays")
+    expect(typeLine("///ankeyx"), "x", "a letter after the settings code is a new word")
 }
