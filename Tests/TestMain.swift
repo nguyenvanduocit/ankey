@@ -273,27 +273,25 @@ func checkSettings() {
     }
 }
 
-/// Telex keys that type `syllable`. `inline` puts every mark right after its letter,
-/// `deferred` types the horn and breve key after the plain letters.
-func telexKeys(_ syllable: String) -> (inline: String, deferred: String) {
-    var inline = "", plain = "", tone = ""
+/// Telex keys that type `syllable` with the horn and breve key after the plain letters. `Engine.keys(for:)`
+/// is the other order, every mark right after its letter.
+func deferredKeys(_ syllable: String) -> String {
+    var plain = "", tone = ""
     var horn = false
     for scalar in syllable.decomposedStringWithCanonicalMapping.unicodeScalars {
         switch scalar.value {
-        case 0x0111: inline += "dd"; plain += "dd"
-        case 0x0302: inline += String(inline.last!); plain += String(plain.last!)
-        case 0x0306, 0x031B: inline += "w"; horn = true
+        case 0x0111: plain += "dd"
+        case 0x0302: plain += String(plain.last!)
+        case 0x0306, 0x031B: horn = true
         case 0x0301: tone = "s"
         case 0x0300: tone = "f"
         case 0x0309: tone = "r"
         case 0x0303: tone = "x"
         case 0x0323: tone = "j"
-        default:
-            inline += String(scalar)
-            plain += String(scalar)
+        default: plain += String(scalar)
         }
     }
-    return (inline + tone, plain + (horn ? "w" : "") + tone)
+    return plain + (horn ? "w" : "") + tone
 }
 
 /// Every attested syllable types out in both key orders, in either tone placement.
@@ -304,8 +302,7 @@ func checkSyllables() {
     }
     var english = 0
     for syllable in Syllables.all {
-        let keys = telexKeys(syllable)
-        for (mode, raw) in [("inline", keys.inline), ("deferred", keys.deferred)] {
+        for (mode, raw) in [("inline", Engine.keys(for: syllable)), ("deferred", deferredKeys(syllable))] {
             // The keys of an always-English word type that word, by design.
             if English.always.contains(raw) {
                 english += 1
@@ -1096,6 +1093,219 @@ func checkOnboarding() {
 }
 
 
+/// A document edited the way an `IMKTextInput` client is. `completion` makes it an address bar: once the text
+/// starts a known address, the rest is added and selected, the way an omnibox shows its inline completion
+/// (`omnibox_view_views.cc`, `OnInlineAutocompleteTextMaybeChanged`).
+private final class Document {
+    let text = NSMutableString()
+    var selection = NSRange(location: 0, length: 0)
+    var completion: String?
+
+    func insert(_ string: String, replacing range: NSRange?) {
+        let range = range ?? selection
+        text.replaceCharacters(in: range, with: string)
+        selection = NSRange(location: range.location + (string as NSString).length, length: 0)
+        complete()
+    }
+
+    func deleteBackward() {
+        if selection.length > 0 {
+            text.deleteCharacters(in: selection)
+            selection = NSRange(location: selection.location, length: 0)
+            return
+        }
+        guard selection.location > 0 else { return }
+        text.deleteCharacters(in: NSRange(location: selection.location - 1, length: 1))
+        selection = NSRange(location: selection.location - 1, length: 0)
+    }
+
+    private func complete() {
+        guard let completion, text.length > 0, selection.location == text.length,
+              completion.hasPrefix(text as String), completion != text as String else { return }
+        let typed = text.length
+        text.setString(completion)
+        selection = NSRange(location: typed, length: text.length - typed)
+    }
+}
+
+/// What the app does around the keys Ankey handles. AppKit stops at a key the input method took, and so does the
+/// omnibox view (`bridged_content_view.mm`). Chromium web content (`render_widget_host_view_cocoa.mm`) commits a
+/// replacement at once, but forwards the key event to its renderer anyway, and Blink (`editing_behavior.cc`,
+/// `VKEY_BACK`) runs its own delete for backspace; only marked text or an insertion of two or more characters at
+/// the caret stops that.
+private enum App: String {
+    case appKit, chromium
+}
+
+private let backspace: Character = "\u{8}"
+
+/// Mirrors the direct-insertion branches of `AnkeyInputController`: a letter shows the rendered word, a boundary
+/// commits it, backspace is left to the app and `Session.erased` follows.
+private struct Typist {
+    var session = Session()
+    var shown = DirectWord()
+    let settings = Settings()
+
+    /// True when Ankey took the key. `edits` are the `insertText` calls it made.
+    mutating func handle(_ key: Character, selection: NSRange, _ edits: inout [DirectWord.Edit]) -> Bool {
+        if key == backspace {
+            guard let left = shown.erased(selection: selection, encoding: .unicode) else { return false }
+            if !session.erased(leaving: left) { session.deleted() }
+            return false
+        }
+        switch session.push(key) {
+        case .consumed:
+            if let (edit, _) = shown.show(session.display(settings), selection: selection, encoding: .unicode) {
+                edits.append(edit)
+            }
+            return true
+        case .commit:
+            if let (edit, _) = shown.show(session.finish(settings), selection: selection, encoding: .unicode) {
+                edits.append(edit)
+            }
+            shown = DirectWord()
+            return false
+        case .pass:
+            return false
+        case .flush, .cheat:
+            preconditionFailure("not typed here")
+        }
+    }
+}
+
+/// One key as the app processes it around the input method.
+private func keyDown(_ key: Character, _ app: App, _ document: Document, _ typist: inout Typist) {
+    var edits: [DirectWord.Edit] = []
+    let taken = typist.handle(key, selection: document.selection, &edits)
+    var atCaret = ""
+    for edit in edits {
+        switch edit {
+        case .replace(let string, let location, let length):
+            document.insert(string, replacing: NSRange(location: location, length: length))
+        case .insert(let string):
+            if app == .chromium { atCaret += string } else { document.insert(string, replacing: nil) }
+        }
+    }
+    switch app {
+    case .appKit:
+        guard !taken else { return }
+        if key == backspace { document.deleteBackward() } else { document.insert(String(key), replacing: nil) }
+    case .chromium:
+        if atCaret.count > 1 {
+            document.insert(atCaret, replacing: nil)
+            return
+        }
+        if key == backspace { document.deleteBackward() }
+        if atCaret.count == 1 {
+            document.insert(atCaret, replacing: nil)
+        } else if !taken, key != backspace {
+            document.insert(String(key), replacing: nil)
+        }
+    }
+}
+
+private func typed(_ keys: String, in app: App, completing completion: String? = nil) -> String {
+    let document = Document()
+    document.completion = completion
+    var typist = Typist()
+    for key in keys { keyDown(key, app, document, &typist) }
+    return document.text as String
+}
+
+private func caret(_ location: Int) -> NSRange {
+    NSRange(location: location, length: 0)
+}
+
+/// Direct insertion: the edits that show the word, and backspace left to the app.
+func checkDirect() {
+    for (text, keys) in [
+        ("ti\u{1ebf}", "tiees"), ("\u{0110}\u{00e0}", "DDaf"), ("\u{01b0}\u{1edb}t", "uwowts"),
+        ("hello", "hello"), ("tieetc", "tieetc"), ("", ""),
+    ] {
+        expect(Engine.keys(for: text), keys, "keys for \(text.debugDescription)")
+    }
+
+    var word = DirectWord()
+    expect(word.show("t", selection: caret(5), encoding: .unicode)?.edit, .insert("t"), "the first letter goes in at the caret")
+    expect(word.show("ti", selection: caret(6), encoding: .unicode)?.edit, .replace("ti", location: 5, length: 1), "the next key replaces the word")
+    expect(word.show("ti", selection: caret(7), encoding: .unicode) == nil, true, "the same text is no edit")
+    let lost = word.show("ti\u{00ea}", selection: nil, encoding: .unicode)
+    expect(lost?.edit, .insert("ti\u{00ea}"), "an unknown selection inserts")
+    expect(lost?.found, false, "and reports the word lost")
+    expect(word.show("ti\u{1ebf}", selection: caret(2), encoding: .unicode)?.found, false, "a caret before the word reports it lost")
+    expect(word.text, "ti\u{1ebf}", "the word is what was inserted last")
+    expect(word.erased(selection: caret(3), encoding: .unicode), "ti", "backspace takes the last letter out")
+    expect(word.erased(selection: nil, encoding: .unicode), "t", "and the next, selection or not")
+    expect(word.erased(selection: caret(1), encoding: .unicode), "", "down to nothing")
+    expect(word.erased(selection: caret(0), encoding: .unicode), "", "and stays there")
+
+    // An address bar selects its inline completion right after the word.
+    var address = DirectWord()
+    _ = address.show("t", selection: caret(0), encoding: .unicode)
+    let completed = NSRange(location: 1, length: 19)
+    expect(address.show("to", selection: completed, encoding: .unicode)?.edit, .replace("to", location: 0, length: 20), "the key replaces the word and the selected completion")
+    expect(address.erased(selection: NSRange(location: 2, length: 18), encoding: .unicode) == nil, true, "backspace with a selection leaves the word whole")
+    expect(address.text, "to", "still the whole word")
+    expect(address.erased(selection: caret(2), encoding: .unicode), "t", "and takes a letter with none")
+
+    var vni = DirectWord()
+    _ = vni.show("\u{1edb}", selection: caret(0), encoding: .vniWindows)
+    let encoded = OutputEncoding.vniWindows.convert("\u{1edb}t")
+    expect(vni.show("\u{1edb}t", selection: caret(2), encoding: .vniWindows)?.edit, .replace(encoded, location: 0, length: 2), "the range counts the encoded word")
+    expect(vni.erased(selection: caret(3), encoding: .vniWindows), "\u{1edb}", "VNI: the t goes")
+    expect(vni.erased(selection: caret(2), encoding: .vniWindows), "\u{01a1}", "VNI: only the tone goes from a marked letter")
+    expect(vni.erased(selection: caret(1), encoding: .vniWindows), "", "VNI: a horn letter is one character")
+    var tcvn3 = DirectWord()
+    _ = tcvn3.show("\u{1ea5}", selection: caret(0), encoding: .tcvn3)
+    expect(tcvn3.erased(selection: caret(1), encoding: .tcvn3), "", "TCVN3: a letter is one character")
+
+    let settings = Settings()
+    var session = Session()
+    for key in "tieets" { _ = session.push(key) }
+    expect(session.display(settings), "ti\u{1ebf}t", "ti\u{1ebf}t typed")
+    expect(session.erased(leaving: "ti\u{1ebf}"), true, "the app took the t out")
+    expect(session.display(settings), "ti\u{1ebf}", "the keys now type what is left")
+    _ = session.push("c")
+    expect(session.display(settings), "ti\u{1ebf}c", "the next key continues the word on screen")
+    for left in ["ti\u{1ebf}", "ti", "t", ""] { expect(session.erased(leaving: left), true, "erased to \(left.debugDescription)") }
+    expect(session.isComposing, false, "nothing left to compose")
+    expect(session.erased(leaving: ""), false, "a backspace with no word is the app's own")
+    session = Session()
+    for key in "///b" { _ = session.push(key) }
+    expect(session.erased(leaving: "///"), true, "a held code loses its last key")
+    expect(session.display(settings), "///", "and shows what is left")
+    // A word erased on screen and typed again learns, the same as one erased key by key.
+    session = Session()
+    for key in "sex" { _ = session.push(key) }
+    expect(session.display(settings), "s\u{1ebd}", "s\u{1ebd} shown")
+    for left in ["s", ""] { _ = session.erased(leaving: left) }
+    for key in "sex" { _ = session.push(key) }
+    expect(session.display(settings), "sex", "erased on screen and typed again shows English")
+    _ = session.push(" ")
+    _ = session.finish(settings)
+    expect(session.learned, Correction(word: "sex", adjust: 2), "and learns it")
+
+    for app in [App.appKit, .chromium] {
+        for (keys, want, label) in [
+            ("aam tieets\(backspace)c", "\u{00e2}m ti\u{1ebf}c", "the t goes and c continues the word"),
+            ("tieecs\(backspace)\(backspace)", "ti", "two backspaces take two letters off the screen"),
+            ("aam tieecs\(backspace)\(backspace)", "\u{00e2}m ti", "and leave the word before alone"),
+            ("tieets\(backspace)\(backspace)\(backspace)\(backspace)\(backspace)", "", "more backspaces than letters"),
+            ("aam \(backspace)\(backspace)tieets", "\u{00e2}ti\u{1ebf}t", "backspaces into a committed word"),
+            ("sex\(backspace)\(backspace)sex ", "sex ", "a word erased on screen and typed again"),
+        ] {
+            expect(typed(keys, in: app), want, "\(app.rawValue): \(label)")
+        }
+    }
+    for (keys, want, label) in [
+        ("to", "to", "the key replaces the selected completion with the word"),
+        ("tr", "translate.google.com", "an address still typed keeps completing"),
+        ("t\(backspace)ooi", "t\u{00f4}i", "backspace takes the completion out and the word goes on"),
+    ] {
+        expect(typed(keys, in: .appKit, completing: "translate.google.com"), want, "address bar: \(label)")
+    }
+}
+
 @main
 struct TestRunner {
     static func main() {
@@ -1120,6 +1330,7 @@ struct TestRunner {
         checkAdjustStore()
         checkCorrection()
         checkSwap()
+        checkDirect()
         checkDoubledKey()
         checkLateCircumflex()
         checkCodeContext()

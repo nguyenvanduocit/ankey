@@ -22,10 +22,10 @@ struct Erasure {
         raw.count >= 3 && raw.lowercased() == keys
     }
 
-    /// One key is about to leave the composing word.
-    mutating func popping(_ raw: String) {
+    /// One key is about to leave the composing word. `all` when backspace takes the last of them out.
+    mutating func popping(_ raw: String, all: Bool) {
         if run == nil { run = raw.lowercased() }
-        if raw.count == 1 { keys = run }
+        if all { keys = run }
     }
 
     /// A letter joined the word. One that leaves the erased keys starts another word.

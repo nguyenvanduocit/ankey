@@ -6,7 +6,7 @@ final class AnkeyInputController: IMKInputController {
     private var session = Session()
     private let anywhere = NSRange(location: NSNotFound, length: NSNotFound)
     /// Direct insertion only: the word as it sits in the document right now.
-    private var shown = ""
+    private var shown = DirectWord()
 
     private struct Context {
         let settings: Settings
@@ -117,6 +117,10 @@ final class AnkeyInputController: IMKInputController {
         let name = selector.map(NSStringFromSelector) ?? ""
         let ctx = context(sender)
         if name == "deleteBackward:" {
+            if ctx.rule.insertion == .direct {
+                eraseShown(sender, ctx)
+                return false
+            }
             guard session.pop() else {
                 session.deleted()
                 return false
@@ -272,22 +276,22 @@ final class AnkeyInputController: IMKInputController {
 
     /// Puts the finished word in the document and leaves nothing pending.
     private func finalize(_ word: String, _ sender: Any!, _ ctx: Context) {
-        let text = ctx.encoding.convert(word)
         if ctx.rule.insertion == .direct {
-            replaceShown(with: text, sender)
-            shown = ""
+            replaceShown(with: word, sender, ctx)
+            shown = DirectWord()
             return
         }
+        let text = ctx.encoding.convert(word)
         guard !text.isEmpty, let client = textClient(sender) else { return }
         client.insertText(text, replacementRange: anywhere)
     }
 
     /// The underlined word stays readable Unicode and converts when it is committed.
-    /// Direct text goes into the document at once, so it converts here.
+    /// Direct text goes into the document at once, so it converts there.
     private func refresh(_ sender: Any!, _ ctx: Context) {
         let text = session.display(ctx.settings)
         if ctx.rule.insertion == .direct {
-            replaceShown(with: ctx.encoding.convert(text), sender)
+            replaceShown(with: text, sender, ctx)
             return
         }
         guard let client = textClient(sender) else { return }
@@ -299,17 +303,32 @@ final class AnkeyInputController: IMKInputController {
     }
 
     /// The caret sits at the end of the shown word, so the word's range is the text just before it.
-    private func replaceShown(with text: String, _ sender: Any!) {
-        guard text != shown, let client = textClient(sender) else { return }
-        let length = shown.utf16.count
-        let caret = client.selectedRange().location
-        if length == 0 || caret == NSNotFound || caret < length {
-            if length > 0 { StatsStore.record(.directFallback) }
-            client.insertText(text, replacementRange: anywhere)
-        } else {
-            client.insertText(text, replacementRange: NSRange(location: caret - length, length: length))
+    private func replaceShown(with text: String, _ sender: Any!, _ ctx: Context) {
+        guard let client = textClient(sender) else { return }
+        guard let (edit, found) = shown.show(text, selection: selection(of: client), encoding: ctx.encoding) else { return }
+        if !found { StatsStore.record(.directFallback) }
+        switch edit {
+        case .insert(let encoded):
+            client.insertText(encoded, replacementRange: anywhere)
+        case .replace(let encoded, let location, let length):
+            client.insertText(encoded, replacementRange: NSRange(location: location, length: length))
         }
-        shown = text
+    }
+
+    /// Direct insertion leaves backspace to the app, which takes its selection out, else the last character of
+    /// the word; the keys become the ones that type what is left. Chromium forwards the key to its renderer even
+    /// when the input method took it, and the renderer runs its own delete, so a word rewritten here lost one
+    /// more character.
+    private func eraseShown(_ sender: Any!, _ ctx: Context) {
+        let selected = textClient(sender).flatMap { self.selection(of: $0) }
+        guard let left = shown.erased(selection: selected, encoding: ctx.encoding) else { return }
+        if !session.erased(leaving: left) { session.deleted() }
+    }
+
+    /// The app's selection, nil when it cannot say.
+    private func selection(of client: any IMKTextInput) -> NSRange? {
+        let range = client.selectedRange()
+        return range.location == NSNotFound ? nil : range
     }
 
     private func textClient(_ sender: Any!) -> (any IMKTextInput)? {

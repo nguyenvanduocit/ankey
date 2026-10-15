@@ -10,7 +10,8 @@ enum ToneStyle: String {
 enum Insertion: String {
     /// The word being typed is underlined marked text that the app holds until commit.
     case marked
-    /// The word is plain text that each key replaces. Nothing is pending, so shortcuts see all of it.
+    /// The word is plain text that each key replaces. Nothing is pending, so shortcuts see all of it. Backspace
+    /// is the app's own: it takes out the last character on screen, not the last Telex key (`DirectWord`).
     case direct
 }
 

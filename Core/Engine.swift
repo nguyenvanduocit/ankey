@@ -168,8 +168,22 @@ struct Session {
             return true
         }
         guard !raw.isEmpty else { return false }
-        erasure.popping(raw)
+        erasure.popping(raw, all: raw.count == 1)
         raw.removeLast()
+        swapped = false
+        return true
+    }
+
+    /// Direct insertion: the app took the last character out of the shown word and `text` is what is left, so
+    /// the keys become the ones that type it. False when nothing was composing: the backspace was the app's own.
+    mutating func erased(leaving text: String) -> Bool {
+        if isHolding {
+            held = text
+            return true
+        }
+        guard !raw.isEmpty else { return false }
+        erasure.popping(raw, all: text.isEmpty)
+        raw = Engine.keys(for: text)
         swapped = false
         return true
     }
@@ -223,6 +237,29 @@ enum Engine {
         _ raw: String, _ settings: Settings = Settings(), after previous: Language? = nil, glued: Bool = false
     ) -> String {
         analyze(raw, settings, after: previous, glued: glued).text
+    }
+
+    /// The Telex keys that type `text`: a mark key right after its letter, the tone key last. Letters Telex has
+    /// no key for stay as they are, so text that is not Vietnamese types itself. `render` gives `text` back for
+    /// every attested syllable.
+    static func keys(for text: String) -> String {
+        var keys = ""
+        var tone = ""
+        for scalar in text.decomposedStringWithCanonicalMapping.unicodeScalars {
+            switch scalar.value {
+            case 0x0110: keys += "DD"
+            case 0x0111: keys += "dd"
+            case 0x0302: if let letter = keys.last { keys.append(letter) }
+            case 0x0306, 0x031B: keys += "w"
+            case 0x0301: tone = "s"
+            case 0x0300: tone = "f"
+            case 0x0309: tone = "r"
+            case 0x0303: tone = "x"
+            case 0x0323: tone = "j"
+            default: keys.unicodeScalars.append(scalar)
+            }
+        }
+        return keys + tone
     }
 
     /// What Telex makes of the keys: the atoms, the tone, the converted text and the keys as typed.

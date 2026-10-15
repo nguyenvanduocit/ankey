@@ -15,12 +15,8 @@ enum OutputEncoding: String, CaseIterable {
 
     /// Letters the encoding has no code for, and everything that is not Vietnamese, stay as they are.
     func convert(_ text: String) -> String {
-        let table: [Character: [UInt8]]
-        switch self {
-        case .unicode: return text
-        case .tcvn3: table = Self.tcvn3Table
-        case .vniWindows: table = Self.vniTable
-        }
+        if self == .unicode { return text }
+        let table = self.table
         var out = String.UnicodeScalarView()
         for character in text {
             if let bytes = table[character] {
@@ -30,6 +26,31 @@ enum OutputEncoding: String, CaseIterable {
             }
         }
         return String(out)
+    }
+
+    /// What is left of `text` once the app deletes the last character of its encoded form. A VNI letter with a
+    /// mark is two characters there, and only the mark goes.
+    func erasingLast(_ text: String) -> String {
+        guard let last = text.last else { return text }
+        var left = String(text.dropLast())
+        let table = self.table
+        guard let bytes = table[last], bytes.count > 1 else { return left }
+        let rest = Array(bytes.dropLast())
+        if let letter = table.first(where: { $0.value == rest })?.key {
+            left.append(letter)
+        } else {
+            left.unicodeScalars.append(contentsOf: rest.map { Unicode.Scalar($0) })
+        }
+        return left
+    }
+
+    /// The bytes of each letter the encoding has its own code for.
+    private var table: [Character: [UInt8]] {
+        switch self {
+        case .unicode: return [:]
+        case .tcvn3: return Self.tcvn3Table
+        case .vniWindows: return Self.vniTable
+        }
     }
 
     /// TCVN3 puts an accented capital on the byte of its lowercase letter; the user shows it with
