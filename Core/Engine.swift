@@ -73,9 +73,8 @@ struct Session {
         glue.contains(ch) || (ch == "." && !afterVietnamese)
     }
 
-    /// Commits the word and remembers its language for the next one. `encode` turns the text into what the
-    /// document will hold, so the backspaces that delete it can be counted.
-    mutating func finish(_ settings: Settings, encode: (String) -> String = { $0 }) -> String {
+    /// Commits the word and remembers its language for the next one.
+    mutating func finish(_ settings: Settings) -> String {
         let (verdict, correction) = decide(settings)
         let text = isHolding ? held : verdict.text
         let language = verdict.language
@@ -95,7 +94,7 @@ struct Session {
         swapped = false
         learned = correction
         erasure.reset()
-        if endedByKey, !keys.isEmpty { erasure.commit(keys, length: encode(text).count + 1) }
+        if endedByKey, !keys.isEmpty { erasure.commit(keys, length: text.count + 1) }
         return text
     }
 

@@ -22,21 +22,6 @@ struct GeneralTab: View {
                 )
             }
 
-            PixelSection(
-                title: "Bảng mã",
-                footer: "Bảng mã cũ chỉ hiện đúng khi font của văn bản là font cũ (.VnTime, VNI-Times). Đặt riêng cho từng ứng dụng ở thẻ Ứng dụng."
-            ) {
-                PixelChoice(
-                    title: "Bảng mã mặc định",
-                    selection: $model.value.encoding,
-                    options: [
-                        ("Unicode", OutputEncoding.unicode),
-                        ("TCVN3", OutputEncoding.tcvn3),
-                        ("VNI Windows", OutputEncoding.vniWindows),
-                    ]
-                )
-            }
-
             PixelSection(title: "Hành vi") {
                 PixelToggle(
                     title: "Giữ nguyên chữ không phải tiếng Việt",
@@ -260,16 +245,6 @@ struct AppRuleRows: View {
                 ("Trực tiếp", AppMode.direct),
             ],
             help: "Gạch chân: chữ đang gõ được gạch chân cho tới khi chốt. Trực tiếp: chữ không chờ gạch chân, nên Cmd+A và các phím tắt khác thấy đủ chữ, và Backspace xoá từng chữ đang hiện. Một số ứng dụng không hỗ trợ."
-        )
-        PixelChoice(
-            title: "Bảng mã",
-            selection: $rule.encoding,
-            options: [
-                ("Mặc định", OutputEncoding?.none),
-                ("Unicode", .unicode),
-                ("TCVN3", .tcvn3),
-                ("VNI Windows", .vniWindows),
-            ]
         )
     }
 }

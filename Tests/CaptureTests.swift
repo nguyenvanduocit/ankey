@@ -8,7 +8,7 @@ private func type(_ keys: String, into session: inout Session) -> Push {
     return last
 }
 
-private let context = FeedbackContext(macOS: "26.4", chip: "Apple M1", encoding: .tcvn3, mode: .direct)
+private let context = FeedbackContext(macOS: "26.4", chip: "Apple M1", mode: .direct)
 
 private func typed(_ keys: String, _ settings: Settings = Settings(), kind: ReportKind = .feedback) -> Capture {
     var capture = Capture(kind)
@@ -185,7 +185,7 @@ func checkCapture() {
 
 }
 
-/// The feedback event carries the typed text, macOS, chip, encoding and mode, and nothing else.
+/// The feedback event carries the typed text, macOS, chip and mode, and nothing else.
 func checkFeedbackEvent() {
     let report = FeedbackReport(
         kind: .bug, text: "g\u{00f5} \u{0111}\u{01b0}\u{1ee3}c r\u{1ed3}i m\u{1ea5}t ch\u{1eef}", context: context
@@ -194,7 +194,7 @@ func checkFeedbackEvent() {
     expect(event.message, "ankey.feedback.bug", "message names the kind")
     expect(FeedbackReport(kind: .feedback, text: "x", context: context).event.message, "ankey.feedback.feedback", "feedback message")
     expect(Set(event.attributes.keys), [
-        "feedbackText", "macOS", "chip", "encoding", "mode",
+        "feedbackText", "macOS", "chip", "mode",
     ], "feedback attributes are the allowlist")
     var strings: [String: String] = [:]
     for (key, value) in event.attributes {
@@ -207,7 +207,6 @@ func checkFeedbackEvent() {
     expect(strings["feedbackText"], report.text, "text goes in feedbackText as typed")
     expect(strings["macOS"], "26.4", "macOS version")
     expect(strings["chip"], "Apple M1", "chip")
-    expect(strings["encoding"], "tcvn3", "encoding is a name, not converted text")
     expect(strings["mode"], "direct", "mode")
     expect(strings.filter { $0.key != "feedbackText" }.values.contains { $0.contains(report.text) }, false, "text appears once")
 

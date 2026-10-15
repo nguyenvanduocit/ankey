@@ -100,7 +100,6 @@ struct StatsPayload {
     var appVersion: String
     var macOS: String
     var toneStyle: ToneStyle
-    var encoding: OutputEncoding
     var appRuleCount: Int
     var log: StatsLog
 
@@ -108,7 +107,6 @@ struct StatsPayload {
         self.appVersion = appVersion
         self.macOS = macOS
         toneStyle = settings.toneStyle
-        encoding = settings.encoding
         appRuleCount = settings.appRules.count
         self.log = log
     }
@@ -120,7 +118,6 @@ struct StatsPayload {
                 "appVersion": .string(appVersion),
                 "macOS": .string(macOS),
                 "toneStyle": .string(toneStyle.rawValue),
-                "encoding": .string(encoding.rawValue),
                 "appRuleCount": .int(appRuleCount),
                 "day": .string(entry.day),
             ]

@@ -187,7 +187,7 @@ struct HelpView: View {
          "Gõ ///feedback (góp ý) hay ///bug (báo lỗi) ở đầu từ, hoặc chọn Gửi góp ý… trong menu bộ gõ. Gõ nội dung rồi bấm Enter để gửi."),
         // README "Mã gõ nhanh"; FeedbackFlow key handling; FeedbackHUD note.
         ("///feedback gửi gì, ai nhận?",
-         "Chỉ gửi khi bạn bấm Enter, Esc để bỏ. Gửi đoạn bạn gõ cùng macOS, chip, bảng mã, chế độ gõ, không có tên ứng dụng. Datadog còn nhận IP và user agent của bạn."),
+         "Chỉ gửi khi bạn bấm Enter, Esc để bỏ. Gửi đoạn bạn gõ cùng macOS, chip, chế độ gõ, không có tên ứng dụng. Datadog còn nhận IP và user agent của bạn."),
         // Settings → Cập nhật footer; the update item in the input menu.
         ("Cập nhật thế nào?",
          "Ankey tự kiểm tra khi mở và mỗi ngày một lần. Có bản mới thì menu bộ gõ hiện Cập nhật lên…, Ankey chỉ cài khi bạn bấm. Muốn kiểm tra ngay thì dùng thẻ Cập nhật."),

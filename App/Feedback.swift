@@ -1,13 +1,12 @@
 import Foundation
 
 extension FeedbackContext {
-    /// This Mac, with the encoding and mode of the app the user is typing in. Never the app itself.
-    static func current(encoding: OutputEncoding, mode: AppMode) -> FeedbackContext {
+    /// This Mac, with the mode of the app the user is typing in. Never the app itself.
+    static func current(mode: AppMode) -> FeedbackContext {
         let os = ProcessInfo.processInfo.operatingSystemVersion
         return FeedbackContext(
             macOS: "\(os.majorVersion).\(os.minorVersion)",
             chip: chipName,
-            encoding: encoding,
             mode: mode
         )
     }

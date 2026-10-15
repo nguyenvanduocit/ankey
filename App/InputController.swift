@@ -11,13 +11,12 @@ final class AnkeyInputController: IMKInputController {
     private struct Context {
         let settings: Settings
         let rule: AppRule
-        let encoding: OutputEncoding
     }
 
     private func context(_ sender: Any!) -> Context {
         let stored = Settings.load()
         let rule = stored.rule(for: textClient(sender)?.bundleIdentifier())
-        return Context(settings: stored, rule: rule, encoding: stored.encoding(for: rule))
+        return Context(settings: stored, rule: rule)
     }
 
     // Overriding handle makes it the only entry point: IMK stops calling inputText and
@@ -118,7 +117,7 @@ final class AnkeyInputController: IMKInputController {
         let ctx = context(sender)
         if name == "deleteBackward:" {
             if ctx.rule.insertion == .direct {
-                eraseShown(sender, ctx)
+                eraseShown(sender)
                 return false
             }
             guard session.pop() else {
@@ -265,7 +264,7 @@ final class AnkeyInputController: IMKInputController {
 
     private func commit(_ sender: Any!, _ ctx: Context) {
         let raw = session.raw
-        let word = session.finish(ctx.settings, encode: ctx.encoding.convert)
+        let word = session.finish(ctx.settings)
         if let correction = session.learned {
             AdjustStore.shared.set(correction.word, to: correction.adjust)
             StatsStore.record(correction.adjust > 0 ? .correctionToEnglish : .correctionToVietnamese)
@@ -277,21 +276,19 @@ final class AnkeyInputController: IMKInputController {
     /// Puts the finished word in the document and leaves nothing pending.
     private func finalize(_ word: String, _ sender: Any!, _ ctx: Context) {
         if ctx.rule.insertion == .direct {
-            replaceShown(with: word, sender, ctx)
+            replaceShown(with: word, sender)
             shown = DirectWord()
             return
         }
-        let text = ctx.encoding.convert(word)
-        guard !text.isEmpty, let client = textClient(sender) else { return }
-        client.insertText(text, replacementRange: anywhere)
+        guard !word.isEmpty, let client = textClient(sender) else { return }
+        client.insertText(word, replacementRange: anywhere)
     }
 
-    /// The underlined word stays readable Unicode and converts when it is committed.
-    /// Direct text goes into the document at once, so it converts there.
+    /// Shows the word being typed: underlined marked text, or plain text in direct insertion.
     private func refresh(_ sender: Any!, _ ctx: Context) {
         let text = session.display(ctx.settings)
         if ctx.rule.insertion == .direct {
-            replaceShown(with: text, sender, ctx)
+            replaceShown(with: text, sender)
             return
         }
         guard let client = textClient(sender) else { return }
@@ -303,15 +300,15 @@ final class AnkeyInputController: IMKInputController {
     }
 
     /// The caret sits at the end of the shown word, so the word's range is the text just before it.
-    private func replaceShown(with text: String, _ sender: Any!, _ ctx: Context) {
+    private func replaceShown(with text: String, _ sender: Any!) {
         guard let client = textClient(sender) else { return }
-        guard let (edit, found) = shown.show(text, selection: selection(of: client), encoding: ctx.encoding) else { return }
+        guard let (edit, found) = shown.show(text, selection: selection(of: client)) else { return }
         if !found { StatsStore.record(.directFallback) }
         switch edit {
-        case .insert(let encoded):
-            client.insertText(encoded, replacementRange: anywhere)
-        case .replace(let encoded, let location, let length):
-            client.insertText(encoded, replacementRange: NSRange(location: location, length: length))
+        case .insert(let text):
+            client.insertText(text, replacementRange: anywhere)
+        case .replace(let text, let location, let length):
+            client.insertText(text, replacementRange: NSRange(location: location, length: length))
         }
     }
 
@@ -319,9 +316,9 @@ final class AnkeyInputController: IMKInputController {
     /// the word; the keys become the ones that type what is left. Chromium forwards the key to its renderer even
     /// when the input method took it, and the renderer runs its own delete, so a word rewritten here lost one
     /// more character.
-    private func eraseShown(_ sender: Any!, _ ctx: Context) {
+    private func eraseShown(_ sender: Any!) {
         let selected = textClient(sender).flatMap { self.selection(of: $0) }
-        guard let left = shown.erased(selection: selected, encoding: ctx.encoding) else { return }
+        guard let left = shown.erased(selection: selected) else { return }
         if !session.erased(leaving: left) { session.deleted() }
     }
 
@@ -354,7 +351,7 @@ extension AnkeyInputController {
                 keyCode,
                 characters: characters,
                 settings: ctx.settings,
-                context: .current(encoding: ctx.encoding, mode: ctx.rule.mode)
+                context: .current(mode: ctx.rule.mode)
             )
         }
         return true

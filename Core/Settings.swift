@@ -25,8 +25,6 @@ struct AppRule: Equatable {
     var bundleID: String
     var enabled = true
     var insertion = Insertion.marked
-    /// The encoding used in this app. `nil` follows `Settings.encoding`.
-    var encoding: OutputEncoding?
 
     /// The single choice behind `enabled` and `insertion`. Turning it off keeps the last insertion.
     var mode: AppMode {
@@ -52,11 +50,10 @@ struct AppRule: Equatable {
         return result
     }
 
-    init(bundleID: String, enabled: Bool = true, insertion: Insertion = .marked, encoding: OutputEncoding? = nil) {
+    init(bundleID: String, enabled: Bool = true, insertion: Insertion = .marked) {
         self.bundleID = bundleID
         self.enabled = enabled
         self.insertion = insertion
-        self.encoding = encoding
     }
 
     init?(stored row: [String: Any]) {
@@ -64,15 +61,12 @@ struct AppRule: Equatable {
         self.init(
             bundleID: bundleID,
             enabled: row["enabled"] as? Bool ?? true,
-            insertion: (row["insertion"] as? String).flatMap(Insertion.init(rawValue:)) ?? .marked,
-            encoding: (row["encoding"] as? String).flatMap(OutputEncoding.init(rawValue:))
+            insertion: (row["insertion"] as? String).flatMap(Insertion.init(rawValue:)) ?? .marked
         )
     }
 
     var stored: [String: Any] {
-        var row: [String: Any] = ["bundleID": bundleID, "enabled": enabled, "insertion": insertion.rawValue]
-        if let encoding { row["encoding"] = encoding.rawValue }
-        return row
+        ["bundleID": bundleID, "enabled": enabled, "insertion": insertion.rawValue]
     }
 }
 
@@ -81,8 +75,6 @@ struct Settings: Equatable {
     var restoreRaw = true
     var abbreviation = true
     var escClears = true
-    /// The encoding for apps whose rule does not set one.
-    var encoding = OutputEncoding.unicode
     var shorthand = ["\u{0111}c"]
     /// What Ankey learned from corrections: a score per word, added to its built-in band. Typed keys,
     /// lowercase. `Settings.load` fills it from the `AdjustStore`, and `save` never writes it.
@@ -102,7 +94,6 @@ extension Settings {
         static let restoreRaw = "restoreRaw"
         static let abbreviation = "abbreviation"
         static let escClears = "escClears"
-        static let encoding = "encoding"
         static let shorthand = "shorthand"
         static let appRules = "appRules"
         static let excludedApps = "excludedApps"
@@ -126,20 +117,12 @@ extension Settings {
         appRules.first { $0.bundleID == bundleID } ?? AppRule(bundleID: bundleID ?? "")
     }
 
-    /// The encoding for one app: its own choice, else the default.
-    func encoding(for rule: AppRule) -> OutputEncoding {
-        rule.encoding ?? encoding
-    }
-
     /// A key that was never saved, or holds the wrong type, keeps its default.
     static func load(from defaults: UserDefaults = .standard, adjust: AdjustStore = .shared) -> Settings {
         var settings = Settings()
         settings.adjust = adjust.words
         if let raw = defaults.string(forKey: Key.toneStyle), let style = ToneStyle(rawValue: raw) {
             settings.toneStyle = style
-        }
-        if let raw = defaults.string(forKey: Key.encoding), let encoding = OutputEncoding(rawValue: raw) {
-            settings.encoding = encoding
         }
         settings.restoreRaw = defaults.object(forKey: Key.restoreRaw) as? Bool ?? settings.restoreRaw
         settings.abbreviation = defaults.object(forKey: Key.abbreviation) as? Bool ?? settings.abbreviation
@@ -167,7 +150,6 @@ extension Settings {
         defaults.set(collectStats, forKey: Key.collectStats)
         defaults.set(shareStats, forKey: Key.shareStats)
         defaults.set(onboardingSeen, forKey: Key.onboardingSeen)
-        defaults.set(encoding.rawValue, forKey: Key.encoding)
         defaults.set(shorthand, forKey: Key.shorthand)
         defaults.set(appRules.map(\.stored), forKey: Key.appRules)
         defaults.removeObject(forKey: Key.excludedApps)

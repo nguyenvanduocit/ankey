@@ -91,7 +91,7 @@ struct FeedbackHUDView: View {
         .padding(.vertical, 2 * Pixel.unit)
         .pixelBox(fill: Pixel.panelLo, raised: false)
 
-        Text("Gửi kèm: macOS, chip, bảng mã, chế độ gõ. Datadog còn nhận IP và user agent của bạn.")
+        Text("Gửi kèm: macOS, chip, chế độ gõ. Datadog còn nhận IP và user agent của bạn.")
             .font(Pixel.font(15))
             .foregroundStyle(Pixel.muted)
             .lineLimit(1)

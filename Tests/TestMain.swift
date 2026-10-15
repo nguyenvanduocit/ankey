@@ -146,6 +146,7 @@ func checkAppRules() {
     mode.mode = .marked
     expect([mode.enabled, mode.insertion == .marked], [true, true], "marked mode")
     expect(settings.rule(for: "com.tdesktop.Telegram").insertion, .direct, "rule direct")
+    expect(AppRule(stored: ["bundleID": "x", "unknownKey": "anything"]), AppRule(bundleID: "x"), "a stored rule with keys this version does not know still loads")
     expect(settings.rule(for: "com.apple.TextEdit"), AppRule(bundleID: "com.apple.TextEdit"), "unknown app gets the default rule")
     expect(settings.rule(for: nil), AppRule(bundleID: ""), "nil bundle id")
     expect(settings.rule(for: "").enabled, true, "empty bundle id stays on")
@@ -454,9 +455,9 @@ func checkCorrection() {
         while session.pop() {}
     }
     /// Commits with a space the way the controller does and reports what the word learned.
-    func commit(_ session: inout Session, _ settings: Settings = Settings(), encode: (String) -> String = { $0 }) -> (text: String, learned: Correction?) {
+    func commit(_ session: inout Session, _ settings: Settings = Settings()) -> (text: String, learned: Correction?) {
         precondition(session.push(" ") == .commit)
-        let text = session.finish(settings, encode: encode)
+        let text = session.finish(settings)
         return (text, session.learned)
     }
     func delete(_ session: inout Session, _ count: Int) {
@@ -586,9 +587,9 @@ func checkCorrection() {
     }
 
     // A word the user committed and then deleted in the document.
-    func committed(_ session: inout Session, _ keys: String, encode: (String) -> String = { $0 }) -> String {
+    func committed(_ session: inout Session, _ keys: String) -> String {
         type(&session, keys)
-        return commit(&session, encode: encode).text
+        return commit(&session).text
     }
     session = Session()
     var text = committed(&session, "sex")
@@ -620,18 +621,6 @@ func checkCorrection() {
     session.forgetContext()
     type(&session, "sex")
     expect(commit(&session).learned, nil, "the caret moved")
-    // The document holds the encoded word, so the encoded length is what backspace takes out.
-    let doubled: (String) -> String = { String($0.flatMap { [$0, "~"] }) }
-    session = Session()
-    text = committed(&session, "sex", encode: doubled)
-    delete(&session, text.count + 1)
-    type(&session, "sex")
-    expect(commit(&session).learned, nil, "the encoded word is longer")
-    session = Session()
-    text = committed(&session, "sex", encode: doubled)
-    delete(&session, doubled(text).count + 1)
-    type(&session, "sex")
-    expect(commit(&session).learned, Correction(word: "sex", adjust: 2), "the encoded length")
 }
 
 /// A tone key typed twice undoes the tone. The keys stay whole unless the undone text is a syllable, so English
@@ -817,75 +806,6 @@ func checkAttested() {
     check("vieetj", "vi\u{1ec7}t")
     check("nguoiwf", "ng\u{01b0}\u{1edd}i")
 }
-func checkEncoding() {
-    func conv(_ text: String, _ encoding: OutputEncoding) -> String { encoding.convert(text) }
-    func scalars(_ text: String) -> [UInt32] { text.unicodeScalars.map(\.value) }
-
-    // Unicode is the identity.
-    expect(conv("Vi\u{1ec7}t Nam", .unicode), "Vi\u{1ec7}t Nam", "unicode is unchanged")
-
-    // TCVN3: one byte per letter, shown as the Latin-1 scalar of that byte.
-    expect(scalars(conv("vi\u{1ec7}t nam", .tcvn3)), [0x76, 0x69, 0xD6, 0x74, 0x20, 0x6E, 0x61, 0x6D], "tcvn3 việt nam")
-    expect(scalars(conv("\u{0111}\u{01b0}\u{1edd}ng", .tcvn3)), [0xAE, 0xAD, 0xEA, 0x6E, 0x67], "tcvn3 đường")
-    expect(scalars(conv("\u{0110}\u{01af}\u{1edc}NG", .tcvn3)), [0xA7, 0xA6, 0xEA, 0x4E, 0x47], "tcvn3 ĐƯỜNG: accented capitals share the lowercase byte")
-    expect(conv("\u{00c1}", .tcvn3), conv("\u{00e1}", .tcvn3), "tcvn3 Á shares the byte of á")
-
-    // VNI Windows: base letter then a mark byte; ơ ư đ and a few vowels are single bytes.
-    expect(scalars(conv("Vi\u{1ec7}t Nam", .vniWindows)), [0x56, 0x69, 0x65, 0xE4, 0x74, 0x20, 0x4E, 0x61, 0x6D], "vni Việt Nam")
-    expect(scalars(conv("\u{0111}\u{01b0}\u{1edd}ng", .vniWindows)), [0xF1, 0xF6, 0xF4, 0xF8, 0x6E, 0x67], "vni đường")
-    expect(scalars(conv("\u{1ea4}", .vniWindows)), [0x41, 0xC1], "vni Ấ")
-    expect(scalars(conv("\u{00f4}", .vniWindows)), [0x6F, 0xE2], "vni ô is o + circumflex byte")
-    expect(scalars(conv("\u{1ed1}", .vniWindows)), [0x6F, 0xE1], "vni ố")
-
-    // Text that is not Vietnamese passes through, and a decomposed letter converts like the precomposed one.
-    expect(conv("hello, 123 !", .tcvn3), "hello, 123 !", "tcvn3 leaves ASCII alone")
-    expect(conv("hello, 123 !", .vniWindows), "hello, 123 !", "vni leaves ASCII alone")
-    expect(conv("a\u{0301}", .tcvn3), conv("\u{00e1}", .tcvn3), "tcvn3 decomposed á")
-    expect(conv("a\u{0301}", .vniWindows), conv("\u{00e1}", .vniWindows), "vni decomposed á")
-    expect(conv("", .tcvn3), "", "empty text")
-
-    // Every Vietnamese letter converts, to Latin-1 scalars, and no two lowercase letters collide.
-    let lower = "àáảãạăằắẳẵặâầấẩẫậđèéẻẽẹêềếểễệìíỉĩịòóỏõọôồốổỗộơờớởỡợùúủũụưừứửữựỳýỷỹỵ"
-    let upper = lower.uppercased()
-    expect(lower.count, 67, "lowercase letter count")
-    expect(upper.count, 67, "uppercase letter count")
-    for encoding in [OutputEncoding.tcvn3, .vniWindows] {
-        var seen = Set<[UInt32]>()
-        for letter in lower {
-            let out = scalars(conv(String(letter), encoding))
-            expect(out.isEmpty || out.contains { $0 < 0x41 || $0 > 0xFE }, false, "\(encoding) \(letter) stays in 0x41...0xFE")
-            expect(seen.insert(out).inserted, true, "\(encoding) \(letter) is unique")
-        }
-    }
-    // A few letters already sit on their own Latin-1 byte, so they come out unchanged.
-    expect(conv("\u{00fd}", .tcvn3), "\u{00fd}", "tcvn3 ý is its own byte")
-    expect(conv("\u{00ec}\u{00ed}\u{00cc}\u{00cd}", .vniWindows), "\u{00ec}\u{00ed}\u{00cc}\u{00cd}", "vni ì í Ì Í are their own bytes")
-
-    // Settings: default, round trip, a bad value, and the per-app override.
-    let suite = "ankey.tests.\(UUID().uuidString)"
-    let defaults = UserDefaults(suiteName: suite)!
-    defer { defaults.removePersistentDomain(forName: suite) }
-    expect(Settings.load(from: defaults).encoding, .unicode, "encoding default")
-    var settings = Settings()
-    settings.encoding = .tcvn3
-    settings.appRules = [
-        AppRule(bundleID: "com.microsoft.Word", encoding: .vniWindows),
-        AppRule(bundleID: "com.apple.TextEdit"),
-    ]
-    settings.save(to: defaults)
-    expect(Settings.load(from: defaults), settings, "encoding round trip")
-    expect(Settings.load(from: defaults).appRules.map(\.encoding), [.vniWindows, nil], "rule encoding round trip")
-    defaults.set("klingon", forKey: "encoding")
-    expect(Settings.load(from: defaults).encoding, .unicode, "bad global encoding falls back")
-    expect(AppRule(stored: ["bundleID": "x", "encoding": "klingon"])?.encoding, nil, "bad rule encoding follows the default")
-    expect(AppRule(stored: ["bundleID": "x"])?.encoding, nil, "old rule without encoding follows the default")
-
-    expect(settings.encoding(for: settings.rule(for: "com.microsoft.Word")), .vniWindows, "app override wins")
-    expect(settings.encoding(for: settings.rule(for: "com.apple.TextEdit")), .tcvn3, "rule without override follows the default")
-    expect(settings.encoding(for: settings.rule(for: "com.unknown.App")), .tcvn3, "unknown app follows the default")
-    expect(settings.encoding(for: settings.rule(for: nil)), .tcvn3, "no bundle id follows the default")
-}
-
 func checkStats() {
     let suite = "ankey.tests.stats.\(UUID().uuidString)"
     let defaults = UserDefaults(suiteName: suite)!
@@ -937,14 +857,13 @@ func checkStats() {
     // list changes with it, so nothing joins the data without a visible edit.
     var sample = StatsLog()
     for event in StatsEvent.allCases { sample.record(event, on: "2026-10-15") }
-    var tcvn = Settings()
-    tcvn.encoding = .tcvn3
-    tcvn.appRules = [AppRule(bundleID: "com.secret.App")]
-    let payload = StatsPayload(appVersion: "1.4.0", macOS: "26.4", settings: tcvn, log: sample)
+    var configured = Settings()
+    configured.appRules = [AppRule(bundleID: "com.secret.App")]
+    let payload = StatsPayload(appVersion: "1.4.0", macOS: "26.4", settings: configured, log: sample)
     let events = payload.events(installID: "11111111-2222-3333-4444-555555555555")
     expect(events.count, 1, "one event per day")
     expect(Set(events[0].attributes.keys), [
-        "appVersion", "macOS", "toneStyle", "encoding", "appRuleCount", "day", "installID",
+        "appVersion", "macOS", "toneStyle", "appRuleCount", "day", "installID",
         "wordChanged", "wordKept", "escRestoredRaw", "directFallback",
         "correctionToEnglish", "correctionToVietnamese", "flipToEnglish", "flipToVietnamese",
     ], "payload attributes are the allowlist")
@@ -952,7 +871,7 @@ func checkStats() {
         if case .string(let text) = value { return text }
         return nil
     }
-    expect(Set(strings), ["1.4.0", "26.4", "modern", "tcvn3", "2026-10-15", "11111111-2222-3333-4444-555555555555"], "payload strings are version, settings, day and install id only")
+    expect(Set(strings), ["1.4.0", "26.4", "modern", "2026-10-15", "11111111-2222-3333-4444-555555555555"], "payload strings are version, settings, day and install id only")
     expect(events[0].attributes["appRuleCount"], .int(1), "payload counts rules without naming them")
     expect(Set(payload.events(installID: nil)[0].attributes.keys).contains("installID"), false, "no install id until the user shares")
 
@@ -1149,18 +1068,18 @@ private struct Typist {
     /// True when Ankey took the key. `edits` are the `insertText` calls it made.
     mutating func handle(_ key: Character, selection: NSRange, _ edits: inout [DirectWord.Edit]) -> Bool {
         if key == backspace {
-            guard let left = shown.erased(selection: selection, encoding: .unicode) else { return false }
+            guard let left = shown.erased(selection: selection) else { return false }
             if !session.erased(leaving: left) { session.deleted() }
             return false
         }
         switch session.push(key) {
         case .consumed:
-            if let (edit, _) = shown.show(session.display(settings), selection: selection, encoding: .unicode) {
+            if let (edit, _) = shown.show(session.display(settings), selection: selection) {
                 edits.append(edit)
             }
             return true
         case .commit:
-            if let (edit, _) = shown.show(session.finish(settings), selection: selection, encoding: .unicode) {
+            if let (edit, _) = shown.show(session.finish(settings), selection: selection) {
                 edits.append(edit)
             }
             shown = DirectWord()
@@ -1226,38 +1145,27 @@ func checkDirect() {
     }
 
     var word = DirectWord()
-    expect(word.show("t", selection: caret(5), encoding: .unicode)?.edit, .insert("t"), "the first letter goes in at the caret")
-    expect(word.show("ti", selection: caret(6), encoding: .unicode)?.edit, .replace("ti", location: 5, length: 1), "the next key replaces the word")
-    expect(word.show("ti", selection: caret(7), encoding: .unicode) == nil, true, "the same text is no edit")
-    let lost = word.show("ti\u{00ea}", selection: nil, encoding: .unicode)
+    expect(word.show("t", selection: caret(5))?.edit, .insert("t"), "the first letter goes in at the caret")
+    expect(word.show("ti", selection: caret(6))?.edit, .replace("ti", location: 5, length: 1), "the next key replaces the word")
+    expect(word.show("ti", selection: caret(7)) == nil, true, "the same text is no edit")
+    let lost = word.show("ti\u{00ea}", selection: nil)
     expect(lost?.edit, .insert("ti\u{00ea}"), "an unknown selection inserts")
     expect(lost?.found, false, "and reports the word lost")
-    expect(word.show("ti\u{1ebf}", selection: caret(2), encoding: .unicode)?.found, false, "a caret before the word reports it lost")
+    expect(word.show("ti\u{1ebf}", selection: caret(2))?.found, false, "a caret before the word reports it lost")
     expect(word.text, "ti\u{1ebf}", "the word is what was inserted last")
-    expect(word.erased(selection: caret(3), encoding: .unicode), "ti", "backspace takes the last letter out")
-    expect(word.erased(selection: nil, encoding: .unicode), "t", "and the next, selection or not")
-    expect(word.erased(selection: caret(1), encoding: .unicode), "", "down to nothing")
-    expect(word.erased(selection: caret(0), encoding: .unicode), "", "and stays there")
+    expect(word.erased(selection: caret(3)), "ti", "backspace takes the last letter out")
+    expect(word.erased(selection: nil), "t", "and the next, selection or not")
+    expect(word.erased(selection: caret(1)), "", "down to nothing")
+    expect(word.erased(selection: caret(0)), "", "and stays there")
 
     // An address bar selects its inline completion right after the word.
     var address = DirectWord()
-    _ = address.show("t", selection: caret(0), encoding: .unicode)
+    _ = address.show("t", selection: caret(0))
     let completed = NSRange(location: 1, length: 19)
-    expect(address.show("to", selection: completed, encoding: .unicode)?.edit, .replace("to", location: 0, length: 20), "the key replaces the word and the selected completion")
-    expect(address.erased(selection: NSRange(location: 2, length: 18), encoding: .unicode) == nil, true, "backspace with a selection leaves the word whole")
+    expect(address.show("to", selection: completed)?.edit, .replace("to", location: 0, length: 20), "the key replaces the word and the selected completion")
+    expect(address.erased(selection: NSRange(location: 2, length: 18)) == nil, true, "backspace with a selection leaves the word whole")
     expect(address.text, "to", "still the whole word")
-    expect(address.erased(selection: caret(2), encoding: .unicode), "t", "and takes a letter with none")
-
-    var vni = DirectWord()
-    _ = vni.show("\u{1edb}", selection: caret(0), encoding: .vniWindows)
-    let encoded = OutputEncoding.vniWindows.convert("\u{1edb}t")
-    expect(vni.show("\u{1edb}t", selection: caret(2), encoding: .vniWindows)?.edit, .replace(encoded, location: 0, length: 2), "the range counts the encoded word")
-    expect(vni.erased(selection: caret(3), encoding: .vniWindows), "\u{1edb}", "VNI: the t goes")
-    expect(vni.erased(selection: caret(2), encoding: .vniWindows), "\u{01a1}", "VNI: only the tone goes from a marked letter")
-    expect(vni.erased(selection: caret(1), encoding: .vniWindows), "", "VNI: a horn letter is one character")
-    var tcvn3 = DirectWord()
-    _ = tcvn3.show("\u{1ea5}", selection: caret(0), encoding: .tcvn3)
-    expect(tcvn3.erased(selection: caret(1), encoding: .tcvn3), "", "TCVN3: a letter is one character")
+    expect(address.erased(selection: caret(2)), "t", "and takes a letter with none")
 
     let settings = Settings()
     var session = Session()
@@ -1312,7 +1220,6 @@ struct TestRunner {
         for (raw, want) in telex { check(raw, want) }
         checkSettings()
         checkAppRules()
-        checkEncoding()
         checkStats()
         checkStatsUpload()
         checkOnboarding()

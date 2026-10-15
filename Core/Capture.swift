@@ -43,7 +43,6 @@ enum Trigger: Equatable {
 struct FeedbackContext: Equatable {
     var macOS: String
     var chip: String
-    var encoding: OutputEncoding
     var mode: AppMode
 }
 
@@ -59,7 +58,6 @@ struct FeedbackReport: Equatable {
             "feedbackText": .string(text),
             "macOS": .string(context.macOS),
             "chip": .string(context.chip),
-            "encoding": .string(context.encoding.rawValue),
             "mode": .string(context.mode.logName),
         ])
     }

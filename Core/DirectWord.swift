@@ -10,7 +10,7 @@ import Foundation
 /// `kKeyboardCodeKeyDownEntries` maps `VKEY_BACK` to `DeleteBackward`. The omnibox view (`bridged_content_view.mm`)
 /// stops at a key the input method took, but selects its inline completion after the word.
 struct DirectWord: Equatable {
-    /// The word as the user reads it. The document holds it in the app's encoding.
+    /// The word as it sits in the document.
     private(set) var text = ""
 
     /// One `insertText` call on the client.
@@ -25,22 +25,21 @@ struct DirectWord: Equatable {
     /// app's, nil when it cannot say. `found` is false when the word is not before the selection: the text then
     /// goes in at the caret, and the old word stays.
     mutating func show(
-        _ text: String, selection: @autoclosure () -> NSRange?, encoding: OutputEncoding
+        _ text: String, selection: @autoclosure () -> NSRange?
     ) -> (edit: Edit, found: Bool)? {
         guard text != self.text else { return nil }
-        let length = encoding.convert(self.text).utf16.count
-        let encoded = encoding.convert(text)
+        let length = self.text.utf16.count
         self.text = text
-        guard length > 0 else { return (.insert(encoded), true) }
-        guard let selection = selection(), selection.location >= length else { return (.insert(encoded), false) }
-        return (.replace(encoded, location: selection.location - length, length: length + selection.length), true)
+        guard length > 0 else { return (.insert(text), true) }
+        guard let selection = selection(), selection.location >= length else { return (.insert(text), false) }
+        return (.replace(text, location: selection.location - length, length: length + selection.length), true)
     }
 
     /// The app took its selection out, or the last character of the word when nothing was selected. What is left
     /// of the word, nil when it stays whole.
-    mutating func erased(selection: NSRange?, encoding: OutputEncoding) -> String? {
+    mutating func erased(selection: NSRange?) -> String? {
         if let selection, selection.length > 0 { return nil }
-        text = encoding.erasingLast(text)
+        if !text.isEmpty { text.removeLast() }
         return text
     }
 }
