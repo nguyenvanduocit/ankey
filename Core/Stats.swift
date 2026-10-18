@@ -18,6 +18,10 @@ enum StatsEvent: String, CaseIterable {
     case flipToEnglish
     /// Shift+Esc showed the Vietnamese reading of a word that stayed as typed.
     case flipToVietnamese
+    /// What the user usually writes after the word before made a word that could be either show as typed.
+    case habitToEnglish
+    /// What the user usually writes after the word before made a word that could be either convert.
+    case habitToVietnamese
 }
 
 /// The counters of one day.

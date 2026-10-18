@@ -15,13 +15,15 @@ struct StatsTab: View {
 
     var body: some View {
         PixelPage {
+            ResourceSection()
+
             PixelSection(
                 title: "Thống kê",
                 footer: "Ankey chỉ đếm số lần. Không lưu chữ bạn gõ, phím bấm hay tên ứng dụng. Tắt đi là xoá hết số đã đếm."
             ) {
                 PixelToggle(
                     title: "Ghi thống kê trên máy",
-                    detail: "Đếm số từ được đổi dấu, số từ giữ nguyên, số lần Esc trả lại chữ đã gõ, số lần Shift+Esc đảo cách đọc, số lần Ankey học lại một từ từ lời sửa và số lần chèn trực tiếp bị lệch. Chỉ lưu trên máy này.",
+                    detail: "Đếm số từ được đổi dấu, số từ giữ nguyên, số lần Esc trả lại chữ đã gõ, số lần Shift+Esc đảo cách đọc, số lần Ankey học lại một từ từ lời sửa, số lần thói quen ngôn ngữ của bạn đổi cách hiển thị một chữ và số lần chèn trực tiếp bị lệch. Chỉ lưu trên máy này.",
                     isOn: $model.value.collectStats
                 )
             }

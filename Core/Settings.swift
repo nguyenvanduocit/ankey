@@ -75,10 +75,21 @@ struct Settings: Equatable {
     var restoreRaw = true
     var abbreviation = true
     var escClears = true
+    /// Offers the rest of a phrase when the words just typed can only go on one way.
+    var suggestions = true
+    /// Counts the phrases typed and suggests the ones typed the same way again and again. Off until the user
+    /// turns it on, because it keeps words the user typed (on this Mac only).
+    var learnsPhrases = false
+    /// Learns which language the user writes after which word, and reads it when a word could be either. Off
+    /// until the user turns it on, because it keeps words the user typed (on this Mac only).
+    var learnsLanguage = false
     var shorthand = ["\u{0111}c"]
     /// What Ankey learned from corrections: a score per word, added to its built-in band. Typed keys,
     /// lowercase. `Settings.load` fills it from the `AdjustStore`, and `save` never writes it.
     var adjust: [String: Int] = [:]
+    /// Which language the user writes after which word. `Settings.load` fills it from the `LanguageHabitsStore`
+    /// when `learnsLanguage` is on, and `save` never writes it.
+    var habits = LanguageHabits()
     var appRules: [AppRule] = []
     /// Counts events on this machine for the statistics tab. Off until the user turns it on.
     var collectStats = false
@@ -94,6 +105,9 @@ extension Settings {
         static let restoreRaw = "restoreRaw"
         static let abbreviation = "abbreviation"
         static let escClears = "escClears"
+        static let suggestions = "suggestions"
+        static let learnsPhrases = "learnsPhrases"
+        static let learnsLanguage = "learnsLanguage"
         static let shorthand = "shorthand"
         static let appRules = "appRules"
         static let excludedApps = "excludedApps"
@@ -127,6 +141,9 @@ extension Settings {
         settings.restoreRaw = defaults.object(forKey: Key.restoreRaw) as? Bool ?? settings.restoreRaw
         settings.abbreviation = defaults.object(forKey: Key.abbreviation) as? Bool ?? settings.abbreviation
         settings.escClears = defaults.object(forKey: Key.escClears) as? Bool ?? settings.escClears
+        settings.suggestions = defaults.object(forKey: Key.suggestions) as? Bool ?? settings.suggestions
+        settings.learnsPhrases = defaults.object(forKey: Key.learnsPhrases) as? Bool ?? settings.learnsPhrases
+        settings.learnsLanguage = defaults.object(forKey: Key.learnsLanguage) as? Bool ?? settings.learnsLanguage
         settings.collectStats = collectsStats(in: defaults)
         settings.shareStats = settings.collectStats && defaults.bool(forKey: Key.shareStats)
         settings.onboardingSeen = defaults.bool(forKey: Key.onboardingSeen)
@@ -147,6 +164,9 @@ extension Settings {
         defaults.set(restoreRaw, forKey: Key.restoreRaw)
         defaults.set(abbreviation, forKey: Key.abbreviation)
         defaults.set(escClears, forKey: Key.escClears)
+        defaults.set(suggestions, forKey: Key.suggestions)
+        defaults.set(learnsPhrases, forKey: Key.learnsPhrases)
+        defaults.set(learnsLanguage, forKey: Key.learnsLanguage)
         defaults.set(collectStats, forKey: Key.collectStats)
         defaults.set(shareStats, forKey: Key.shareStats)
         defaults.set(onboardingSeen, forKey: Key.onboardingSeen)

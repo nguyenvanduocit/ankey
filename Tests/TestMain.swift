@@ -14,19 +14,20 @@ let telex: [(String, String)] = [
     ("a", "a"),
     ("as", "á"),
     ("af", "à"),
-    ("ar", "ả"),
+    ("lar", "lả"),
     ("ax", "ã"),
     ("aj", "ạ"),
     ("az", "az"),
     ("asz", "a"),
-    ("ass", "ass"),
+    ("ass", "as"),
+    ("asss", "ass"),
     ("asf", "à"),
     ("aa", "â"),
     ("aaa", "aa"),
     ("aas", "ấ"),
     ("aw", "ă"),
     ("aww", "aw"),
-    ("aws", "ắ"),
+    ("maws", "mắ"),
     ("ee", "ê"),
     ("oo", "ô"),
     ("ooo", "oo"),
@@ -676,11 +677,378 @@ func checkSwap() {
 
 func checkDoubledKey() {
     for word in [
-        "coss", "sexx", "boss", "pass", "class", "mass", "less", "loss", "miss", "off", "carry", "marry", "buff", "ass",
-        "harass", "hiss", "lass", "iff", "taxx", "address", "assert", "assertEqual", "assist", "error", "staff",
+        "boss", "pass", "class", "mass", "less", "loss", "miss", "off", "carry", "marry", "buff", "lass", "diss", "muss",
+        "harass", "hiss", "lass", "iff", "address", "assert", "assertEqual", "assist", "error", "staff",
         "success", "process", "message", "coffee", "banjj", "hocjj",
     ] { check(word, word) }
     for (typed, want) in [("tooo", "too"), ("seee", "see"), ("saww", "saw")] { check(typed, want) }
+}
+
+func checkShortDevWords() {
+    let s = Settings()
+    for word in ["ex", "ix", "ox", "er", "ar", "aws", "efs", "orm", "AWS", "EFS", "ORM"] {
+        expect(Engine.render(word, s, after: nil), word, "\(word) stays as typed")
+    }
+    expect(Engine.render("os", s, after: nil), "\u{00f3}", "os without context")
+    expect(Engine.render("os", s, after: .english), "os", "os after English")
+    expect(Engine.render("es", s, after: .english), "es", "es after English")
+    // A digit right after the letters ties them to it; a space does not.
+    func commit(_ keys: String, _ boundary: Character) -> String {
+        var session = Session()
+        for ch in keys { _ = session.push(ch) }
+        precondition(session.push(boundary) == .commit)
+        return session.finish(s)
+    }
+    expect(commit("arm", "6"), "arm", "arm64")
+    expect(commit("arm", " "), "\u{1ea3}m", "arm then a space")
+    expect(commit("cams", "2"), "cams", "cams2")
+}
+
+func checkSuggest() {
+    func index(_ lines: String) -> PhraseIndex {
+        guard let index = PhraseIndex(data: PhraseIndex.build(lines: lines.split(separator: "\n"))) else {
+            fatalError("the index it built does not read back")
+        }
+        return index
+    }
+    func rest(_ typed: String, _ index: PhraseIndex, _ style: ToneStyle = .modern) -> String? {
+        Suggest.completion(after: typed.split(separator: " ").map(String.init), style: style, in: index)
+    }
+
+    // What every phrase through the typed words agrees on, up to where they split or one ends.
+    let small = index("a b c d e\na b c d f\nx y z w\nx y z\np q r s t\n# a comment")
+    expect(rest("a", small), "b c d", "the common stretch before a split")
+    expect(rest("a b c d", small), nil, "the phrases split right after")
+    expect(rest("x y", small), "z", "the rest stops where a phrase ends")
+    expect(rest("x y z", small), nil, "the typed words are a phrase themselves")
+    expect(rest("p q", small), "r s t", "several syllables left")
+    expect(rest("q r s", small), nil, "no phrase starts there")
+    expect(rest("z a b c", small), "d", "the longest run that starts a phrase decides")
+    expect(rest("a b c d e", small), nil, "the phrase is done")
+    expect(rest("a b unknown", small), nil, "a syllable no phrase has")
+    expect(rest("", small), nil, "no word typed")
+
+    // Case and tone placement compare equal; the rest takes the user's placement.
+    let tones = index("xin thế hoà bình giới")
+    expect(rest("Xin Thế Hòa", tones), "bình giới", "capitals and placement are no difference")
+    let placed = index("x y z hoà bình")
+    expect(rest("x y z", placed, .modern), "hoà bình", "modern placement")
+    expect(rest("x y z", placed, .classic), "hòa bình", "classic placement")
+
+    // A prefix whose other continuations were too rare to list ends in a stop, so it offers nothing.
+    let stop = index("a b c d\na b …")
+    expect(rest("a b", stop), nil, "a stop keeps the words from suggesting the one listed way")
+    expect(rest("a b c", stop), "d", "the listed way still completes")
+
+    // The real list: common compounds, found by counting Vietnamese text.
+    guard let text = try? String(contentsOfFile: "Resources/phrases.txt", encoding: .utf8) else {
+        failed += 1
+        fputs("FAIL Resources/phrases.txt cannot be read\n", stderr)
+        return
+    }
+    let real = index(text)
+    expect(rest("ung", real), "thư", "a compound")
+    expect(rest("không có thời", real), "gian", "a common phrase")
+    expect(rest("cuộc chiến thương", real), "mại", "the end of a word")
+    expect(rest("thành phố hồ chí", real), "minh", "a name")
+    expect(rest("tôi đang ăn", real), nil, "no certain way on")
+
+    // A session offers the rest only after words ended by spaces, and a break takes it away.
+    let phrases = index("lỡ vận sa cơ")
+    var session = Session()
+    let settings = Settings()
+    func word(_ keys: String, _ boundary: Character = " ") {
+        for ch in keys { _ = session.push(ch) }
+        precondition(session.push(boundary) == .commit)
+        _ = session.finish(settings)
+    }
+    word("lowx")
+    expect(session.suggestion(settings, in: phrases), "vận sa cơ", "after one word")
+    word("vaajn")
+    expect(session.suggestion(settings, in: phrases), "sa cơ", "after two words")
+    word("sa")
+    expect(session.suggestion(settings, in: phrases), "cơ", "after three words")
+    _ = session.push("c")
+    expect(session.suggestion(settings, in: phrases), "cơ", "a letter typed keeps the run")
+    _ = session.pop()
+    session.deleted()
+    expect(session.suggestion(settings, in: phrases), nil, "a backspace to the app ends it")
+    word("lowx"); word("vaajn"); word("sa", ",")
+    expect(session.suggestion(settings, in: phrases), nil, "a comma ends it")
+    word("lowx"); word("vaajn"); word("sa")
+    _ = session.push(" ")
+    expect(session.suggestion(settings, in: phrases), nil, "a second space ends it")
+    // The run keeps only the words Suggest reads, however long the text goes without a break.
+    session = Session()
+    for _ in 0..<40 { word("ba") }
+    word("lowx"); word("vaajn"); word("sa")
+    expect(session.suggestion(settings, in: phrases), "cơ", "after a long run")
+    let kept = Mirror(reflecting: session).children.first { $0.label == "phrase" }?.value as? [String]
+    expect(kept?.count, Suggest.maxWords, "the run is capped")
+    word("lowx"); word("vaajn"); word("sa")
+    session.accepted()
+    expect(session.suggestion(settings, in: phrases), nil, "accepting starts a new run")
+}
+
+func checkResourceUsage() {
+    func sample(cpu: Double, at: Double) -> ResourceSample {
+        ResourceSample(footprintBytes: 0, peakFootprintBytes: 0, cpuSeconds: cpu, threads: 1, uptime: 0, at: at)
+    }
+    expect(ResourceUsage.cpuPercent(from: sample(cpu: 1, at: 10), to: sample(cpu: 1.5, at: 12)), 25, "half a second of CPU in two")
+    expect(ResourceUsage.cpuPercent(from: sample(cpu: 1, at: 10), to: sample(cpu: 3, at: 11)), 200, "two cores busy")
+    expect(ResourceUsage.cpuPercent(from: sample(cpu: 1, at: 10), to: sample(cpu: 1, at: 10)), 0, "no time passed")
+    expect(ResourceUsage.size(512 * 1024), "512 KB", "kilobytes")
+    expect(ResourceUsage.size(26_500_000), "25,3 MB", "megabytes with a comma")
+    expect(ResourceUsage.size(1_288_490_189), "1,2 GB", "gigabytes")
+    expect(ResourceUsage.percent(0.34), "0,3%", "a decimal under ten")
+    expect(ResourceUsage.percent(12.6), "13%", "whole above ten")
+    expect(ResourceUsage.duration(45), "45 giây", "seconds")
+    expect(ResourceUsage.duration(12 * 60 + 5), "12 phút", "minutes")
+    expect(ResourceUsage.duration(3600 + 12 * 60), "1 giờ 12 phút", "hours")
+    expect(ResourceUsage.duration(2 * 86_400 + 3 * 3600 + 59), "2 ngày 3 giờ", "days")
+}
+
+func checkPersonalPhrases() {
+    /// Types `sentence` the way a Session reports it: each word after the ones before it, as a run.
+    func learn(_ sentence: String, times: Int = 1, day: Int = 0, into phrases: inout PersonalPhrases) {
+        let words = sentence.split(separator: " ").map(String.init)
+        for _ in 0..<times {
+            for end in 1..<words.count {
+                phrases.observe(context: Array(words[..<end]), word: words[end], covered: false, today: day)
+            }
+        }
+    }
+    func rest(_ typed: String, _ phrases: PersonalPhrases, day: Int = 0) -> String? {
+        phrases.certain(after: typed.split(separator: " ").map(String.init), today: day)?.joined(separator: " ")
+    }
+
+    // A pair is learned from its second sighting and suggested from its third.
+    var phrases = PersonalPhrases()
+    learn("công ty abc", times: 1, into: &phrases)
+    expect(phrases.isEmpty, true, "one sighting is not stored")
+    learn("công ty abc", times: 1, into: &phrases)
+    expect(rest("công ty", phrases), nil, "two sightings are not enough")
+    learn("công ty abc", times: 1, into: &phrases)
+    expect(rest("công ty", phrases), "abc", "three sightings suggest")
+    expect(rest("Công Ty", phrases), "abc", "capitals compare equal")
+    expect(rest("ty", phrases), "abc", "a shorter prefix learned too")
+
+    // Two ways on, neither with most of the occurrences, offer nothing.
+    phrases = PersonalPhrases()
+    learn("dự án x", times: 3, into: &phrases)
+    learn("dự án y", times: 3, into: &phrases)
+    expect(rest("dự án", phrases), nil, "an even split")
+
+    // What the shared list predicts is not stored; numbers and long tokens are not learned.
+    phrases = PersonalPhrases()
+    for _ in 0..<5 { phrases.observe(context: ["xã", "hội"], word: "chủ", covered: true, today: 0) }
+    expect(phrases.isEmpty, true, "covered by the shared list")
+    for _ in 0..<5 { phrases.observe(context: ["mã", "số"], word: "a1b2", covered: false, today: 0) }
+    expect(phrases.isEmpty, true, "a token with digits")
+
+    // A phrase goes on as far as the user's text agrees.
+    phrases = PersonalPhrases()
+    learn("công ty abc ltd", times: 3, into: &phrases)
+    expect(rest("công ty", phrases), "abc ltd", "a chain")
+
+    // The table never passes its cap, however much is typed.
+    phrases = PersonalPhrases()
+    for i in 0..<30_000 {
+        for _ in 0..<2 { phrases.observe(context: ["w\(i % 997)x", "k"], word: "n\(i)a", covered: false, today: 0) }
+    }
+    expect(phrases.nodes.count <= PersonalPhrases.maxNodes, true, "the cap holds")
+
+    // What was used often and lately outlasts what was not.
+    phrases = PersonalPhrases()
+    learn("tên riêng hay gặp", times: 40, day: 100, into: &phrases)
+    for i in 0..<PersonalPhrases.maxNodes + 2000 {
+        for _ in 0..<2 { phrases.observe(context: ["a\(i)b"], word: "c", covered: false, today: 100) }
+    }
+    expect(rest("tên riêng", phrases, day: 100), "hay gặp", "the frequent phrase survived the eviction")
+
+    // Habits change: the old count fades, and the new phrase takes over.
+    phrases = PersonalPhrases()
+    learn("gửi anh a", times: 12, day: 0, into: &phrases)
+    expect(rest("gửi anh", phrases, day: 0), "a", "the first habit")
+    expect(rest("gửi anh", phrases, day: 400), nil, "unused for over a year, it is forgotten")
+    learn("gửi anh b", times: 15, day: 100, into: &phrases)
+    expect(rest("gửi anh", phrases, day: 100), "b", "the new habit wins")
+
+    // A habit however well learned is relearned in tens of uses, not in as many as it took to learn it.
+    var settled = PersonalPhrases()
+    learn("gửi anh a", times: 500, into: &settled)
+    expect(rest("gửi anh", settled), "a", "a settled habit")
+    var uses = 0
+    while rest("gửi anh", settled) != "b", uses < 300 {
+        learn("gửi anh b", times: 1, into: &settled)
+        uses += 1
+    }
+    expect(uses <= 80, true, "relearned within 80 uses (took \(uses))")
+    var stops = 0
+    var leaving = PersonalPhrases()
+    learn("gửi anh a", times: 500, into: &leaving)
+    while rest("gửi anh", leaving) == "a", stops < 300 {
+        learn("gửi anh b", times: 1, into: &leaving)
+        stops += 1
+    }
+    expect(stops <= 15, true, "the old suggestion stops within 15 uses of the new (took \(stops))")
+
+    // It survives being written to disk, and the table of first sightings stays bytes, not a list of numbers.
+    phrases = PersonalPhrases()
+    learn("công ty abc ltd", times: 3, into: &phrases)
+    guard let data = try? JSONEncoder().encode(phrases), let back = try? JSONDecoder().decode(PersonalPhrases.self, from: data) else {
+        failed += 1
+        fputs("FAIL personal phrases do not round-trip\n", stderr)
+        return
+    }
+    expect(back, phrases, "a round trip changes nothing")
+    expect(data.count < 400_000, true, "a small table is a small file")
+
+    // Forgetting one phrase leaves the rest.
+    var forgotten = back
+    forgotten.forget(prefix: "công ty", word: "abc")
+    expect(rest("công ty", forgotten), nil, "forgotten")
+    expect(rest("ty abc", forgotten), "ltd", "the rest stays")
+
+    // Personal phrases come before the shared list.
+    let shared = PhraseIndex(data: PhraseIndex.build(lines: ["công ty xyz kia"]))!
+    expect(Suggest.completion(after: ["công", "ty"], style: .modern, in: shared), "xyz kia", "the shared list alone")
+    expect(Suggest.completion(after: ["công", "ty"], style: .modern, in: shared, personal: phrases), "abc ltd", "personal first")
+}
+
+func checkLanguageHabits() {
+    var habits = LanguageHabits()
+    habits.asOf = 0
+    func teach(_ word: String, _ language: Language, _ times: Int, day: Int = 0) {
+        for _ in 0..<times { habits.observe(after: word, language: language, weight: 1, today: day) }
+    }
+    expect(habits.lean(after: "dùng"), nil, "nothing learned yet")
+    teach("dùng", .english, 7)
+    expect(habits.lean(after: "dùng"), nil, "seven samples are too few")
+    teach("dùng", .english, 1)
+    expect(habits.lean(after: "dùng"), .english, "eight one-sided samples lean")
+    expect(habits.lean(after: "Dùng"), .english, "capitals compare equal")
+    teach("tôi", .vietnamese, 20)
+    expect(habits.lean(after: "tôi"), .vietnamese, "the other way")
+    teach("rồi", .vietnamese, 9)
+    teach("rồi", .english, 3)
+    expect(habits.lean(after: "rồi"), nil, "a word followed by both is not decided (75%)")
+    expect(habits.lean(after: nil), nil, "no word before")
+
+    // A word chosen by hand counts for several samples.
+    habits.observe(after: "cài", language: .english, weight: LanguageHabits.chosenWeight, today: 0)
+    habits.observe(after: "cài", language: .english, weight: LanguageHabits.chosenWeight, today: 0)
+    expect(habits.lean(after: "cài"), .english, "two chosen words are eight samples")
+
+    // The habit changes with the user, and what is not seen fades.
+    habits.asOf = 400
+    expect(habits.lean(after: "dùng"), nil, "unused for over a year, it is forgotten")
+    habits.asOf = 0
+    var changing = LanguageHabits()
+    for _ in 0..<40 { changing.observe(after: "x", language: .english, weight: 1, today: 0) }
+    for _ in 0..<100 { changing.observe(after: "x", language: .vietnamese, weight: 1, today: 120) }
+    changing.asOf = 120
+    expect(changing.lean(after: "x"), .vietnamese, "the new habit wins")
+
+    // A habit however well learned is relearned in tens of words.
+    var settled = LanguageHabits()
+    for _ in 0..<500 { settled.observe(after: "dùng", language: .english, weight: 1, today: 0) }
+    var words = 0
+    while settled.lean(after: "dùng") != .vietnamese, words < 400 {
+        settled.observe(after: "dùng", language: .vietnamese, weight: 1, today: 0)
+        words += 1
+    }
+    expect(words <= 120, true, "relearned within 120 words (took \(words))")
+
+    // The table never passes its cap, and what is one-sided and frequent outlasts the noise.
+    var full = LanguageHabits()
+    for _ in 0..<30 { full.observe(after: "giữ", language: .english, weight: 1, today: 0) }
+    for i in 0..<(LanguageHabits.maxNodes + 3000) {
+        full.observe(after: "w" + String(UnicodeScalar(UInt8(97 + i % 26))) + String(UnicodeScalar(UInt8(97 + (i / 26) % 26))) + String(UnicodeScalar(UInt8(97 + (i / 676) % 26))) + String(UnicodeScalar(UInt8(97 + (i / 17576) % 26))), language: .vietnamese, weight: 1, today: 0)
+    }
+    expect(full.nodes.count <= LanguageHabits.maxNodes, true, "the cap holds")
+    expect(full.lean(after: "giữ"), .english, "the frequent one-sided word survived")
+
+    // It survives being written to disk, and a word can be forgotten.
+    guard let data = try? JSONEncoder().encode(habits), let back = try? JSONDecoder().decode(LanguageHabits.self, from: data) else {
+        failed += 1
+        fputs("FAIL habits do not round-trip\n", stderr)
+        return
+    }
+    expect(back, habits, "a round trip changes nothing")
+    var forgotten = back
+    forgotten.forget("dùng")
+    expect(forgotten.lean(after: "dùng"), nil, "forgotten")
+
+    // The engine: the habit settles a word that could be either, and never turns English everywhere into Vietnamese.
+    var settings = Settings()
+    settings.habits = habits
+    expect(Engine.analyze("as", settings, after: .vietnamese, habit: .english).text, "as", "as after a word English follows")
+    expect(Engine.analyze("as", settings, after: .vietnamese, habit: .vietnamese).text, "\u{00e1}", "á after a word Vietnamese follows")
+    expect(Engine.analyze("test", settings, after: .vietnamese, habit: .vietnamese).text, "test", "test stays English whatever follows")
+    expect(Engine.analyze("as", settings, after: .english, habit: .vietnamese).text, "\u{00e1}", "the habit takes the context bonus back")
+    expect(Engine.analyze("cos", settings, after: .english, habit: .english).text, "cos", "a word the Vietnamese wins by default turns with both")
+    expect(Engine.analyze("cos", settings, after: .vietnamese, habit: .english).text, "c\u{00f3}", "and not with the habit alone")
+
+    // A session reads the habit of the word before, and reports what it learned.
+    func type(_ session: inout Session, _ keys: String, _ boundary: Character = " ") -> String {
+        for ch in keys { _ = session.push(ch) }
+        precondition(session.push(boundary) == .commit)
+        return session.finish(settings)
+    }
+    var session = Session()
+    _ = type(&session, "tooi")
+    expect(session.observed == nil, true, "the first word has no word before it")
+    _ = type(&session, "dungf")
+    expect(session.observed?.previous, "tôi", "the word before")
+    expect(session.observed?.language, .vietnamese, "a Vietnamese word, never in doubt")
+    expect(session.observed?.weight, 1, "counted once")
+    _ = type(&session, "hello")
+    expect(session.observed?.language, .english, "an English word, never in doubt")
+    _ = type(&session, "test")
+    expect(session.observed == nil, true, "a word the lists know says nothing: its language came from the same score")
+    // The word after one the user always follows with English.
+    var learned = Settings()
+    var trained = LanguageHabits()
+    for _ in 0..<10 { trained.observe(after: "cài", language: .english, weight: 1, today: 0) }
+    trained.asOf = 0
+    learned.habits = trained
+    session = Session()
+    for ch in "caif " { _ = session.push(ch) }
+    _ = session.finish(learned)
+    for ch in "as" { _ = session.push(ch) }
+    expect(session.display(learned), "as", "after cài, as is English")
+    expect(session.display(Settings()), "\u{00e1}", "without the habit it is á")
+    // Esc is a choice, and a strong one.
+    session = Session()
+    for ch in "caif " { _ = session.push(ch) }
+    _ = session.finish(settings)
+    for ch in "as" { _ = session.push(ch) }
+    _ = session.finishRaw()
+    expect(session.observed?.previous, "cài", "Esc: the word before")
+    expect(session.observed?.language, .english, "Esc: English")
+    expect(session.observed?.weight, LanguageHabits.chosenWeight, "Esc: a chosen word")
+}
+
+func checkToneUndo() {
+    let s = Settings()
+    // The keys before the repeat showed Vietnamese, so the repeat undoes the tone.
+    for (typed, want) in [("ass", "as"), ("coss", "cos"), ("sexx", "sex"), ("taxx", "tax"), ("carr", "car"), ("barr", "bar"), ("ASS", "AS")] {
+        expect(Engine.render(typed, s), want, "\(typed) undoes the tone")
+    }
+    for (typed, want) in [("oss", "os"), ("ess", "es"), ("err", "err")] {
+        expect(Engine.render(typed, s), want, "\(typed) undoes the tone or stays")
+    }
+    // The third press gives the doubled letters; a fourth is not a Telex key anymore.
+    for (typed, want) in [("asss", "ass"), ("cosss", "coss"), ("assss", "assss"), ("bosss", "bosss")] {
+        expect(Engine.render(typed, s), want, "\(typed) third press")
+    }
+    expect(Engine.render("asss", s, after: .english), "asss", "asss after English")
+    // After an English word `as` already shows as typed, so the second key is a letter.
+    expect(Engine.render("ass", s, after: .english), "ass", "ass after English")
+    // A longer word reads from the start again.
+    expect(Engine.render("assert", s), "assert", "assert")
+    expect(Engine.render("ass", Settings(restoreRaw: false)), "as", "ass keeps the Telex undo with restoreRaw off")
 }
 
 func checkContext() {
@@ -865,7 +1233,7 @@ func checkStats() {
     expect(Set(events[0].attributes.keys), [
         "appVersion", "macOS", "toneStyle", "appRuleCount", "day", "installID",
         "wordChanged", "wordKept", "escRestoredRaw", "directFallback",
-        "correctionToEnglish", "correctionToVietnamese", "flipToEnglish", "flipToVietnamese",
+        "correctionToEnglish", "correctionToVietnamese", "flipToEnglish", "flipToVietnamese", "habitToEnglish", "habitToVietnamese",
     ], "payload attributes are the allowlist")
     let strings = events[0].attributes.values.compactMap { value -> String? in
         if case .string(let text) = value { return text }
@@ -1239,6 +1607,12 @@ struct TestRunner {
         checkSwap()
         checkDirect()
         checkDoubledKey()
+        checkToneUndo()
+        checkResourceUsage()
+        checkPersonalPhrases()
+        checkLanguageHabits()
+        checkSuggest()
+        checkShortDevWords()
         checkLateCircumflex()
         checkCodeContext()
         checkRawRestore()

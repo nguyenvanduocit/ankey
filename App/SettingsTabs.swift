@@ -5,6 +5,8 @@ import UniformTypeIdentifiers
 struct GeneralTab: View {
     @ObservedObject var model: SettingsModel
     @State private var learned = AdjustStore.shared.words
+    @State private var phrases = PersonalPhrasesStore.shared.learned(limit: 40)
+    @State private var habits = LanguageHabitsStore.shared.learned(limit: 40)
 
     var body: some View {
         PixelPage {
@@ -33,6 +35,63 @@ struct GeneralTab: View {
                     detail: "Từ đã ghép dấu: Esc trả lại chữ đã gõ. Từ khác: bật thì xoá từ, tắt thì chốt từ rồi gửi Esc cho ứng dụng.",
                     isOn: $model.value.escClears
                 )
+                PixelToggle(
+                    title: "Học cụm từ bạn hay gõ",
+                    detail: "Ankey nhớ các cụm bạn gõ lặp lại (tên dự án, thuật ngữ) để gợi ý lần sau. Lưu trên máy này, tối đa khoảng 2 MB, không gửi đi. Cụm lâu không dùng tự bị bỏ.",
+                    isOn: $model.value.learnsPhrases
+                )
+                PixelToggle(
+                    title: "Học khi nào bạn gõ tiếng Anh",
+                    detail: "Ankey nhớ sau từ nào bạn thường gõ tiếng Anh hay tiếng Việt, rồi dùng khi một chữ có thể là cả hai (as, cos). Lưu trên máy này, tối đa khoảng 1 MB, không gửi đi. Esc, Shift+Esc và sửa chữ được tính nặng hơn.",
+                    isOn: $model.value.learnsLanguage
+                )
+                PixelToggle(
+                    title: "Gợi ý cụm từ",
+                    detail: "Gõ vài từ của một cụm chỉ có một cách đi tiếp (xã hội chủ…): Ankey hiện phần còn lại, bấm Tab để nhận.",
+                    isOn: $model.value.suggestions
+                )
+            }
+
+            if model.value.learnsPhrases {
+                PixelSection(
+                    title: "Cụm Ankey đã học",
+                    footer: phrases.isEmpty
+                        ? "Chưa có cụm nào. Một cụm được gợi ý khi bạn gõ nó giống nhau từ ba lần."
+                        : "Chỉ những cụm Ankey sẽ gợi ý. Bấm xoá để quên một cụm."
+                ) {
+                    ForEach(phrases, id: \.prefix) { row in
+                        WordRow(word: "\(row.prefix) → \(row.word)  ×\(row.count)") {
+                            PersonalPhrasesStore.shared.forget(prefix: row.prefix, word: row.word)
+                            phrases = PersonalPhrasesStore.shared.learned(limit: 40)
+                        }
+                    }
+                    Button("Xoá hết cụm đã học") {
+                        PersonalPhrasesStore.shared.forgetAll()
+                        phrases = []
+                    }
+                    .buttonStyle(PixelButtonStyle())
+                }
+            }
+
+            if model.value.learnsLanguage {
+                PixelSection(
+                    title: "Thói quen ngôn ngữ",
+                    footer: habits.isEmpty
+                        ? "Chưa có thói quen nào. Cần ít nhất 8 lần gõ sau cùng một từ."
+                        : "Sau những từ này bạn gần như luôn gõ cùng một thứ tiếng. Bấm xoá để quên."
+                ) {
+                    ForEach(habits, id: \.word) { row in
+                        WordRow(word: "\(row.word) → \(row.language == .english ? "tiếng Anh" : "tiếng Việt")  ×\(row.samples)") {
+                            LanguageHabitsStore.shared.forget(row.word)
+                            habits = LanguageHabitsStore.shared.learned(limit: 40)
+                        }
+                    }
+                    Button("Xoá hết thói quen") {
+                        LanguageHabitsStore.shared.forgetAll()
+                        habits = []
+                    }
+                    .buttonStyle(PixelButtonStyle())
+                }
             }
 
             if !learned.isEmpty {
@@ -49,7 +108,11 @@ struct GeneralTab: View {
                 }
             }
         }
-        .onAppear { learned = AdjustStore.shared.words }
+        .onAppear {
+            learned = AdjustStore.shared.words
+            phrases = PersonalPhrasesStore.shared.learned(limit: 40)
+            habits = LanguageHabitsStore.shared.learned(limit: 40)
+        }
     }
 }
 

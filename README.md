@@ -14,45 +14,39 @@ curl -fsSL https://raw.githubusercontent.com/nguyenvanduocit/ankey/main/install.
 
 Đăng xuất rồi đăng nhập lại, sau đó thêm **Ankey** ở System Settings → Keyboard → Input Sources → Edit… → **+** → Vietnamese.
 
-Lần đầu mở, Ankey hiện cửa sổ **Hướng dẫn** gồm ba bước: bật Ankey, gõ thử, và các mẹo. Sau đó, menu bộ gõ → **Trợ giúp…** mở danh sách mã gõ nhanh và phần hỏi đáp. Cũng trong menu đó, **Gửi góp ý…** mở khung góp ý.
+Lần đầu mở, Ankey hiện cửa sổ **Hướng dẫn** gồm ba bước: bật Ankey, gõ thử, và các mẹo. Sau đó, menu bộ gõ → **Trợ giúp…** mở danh sách mã gõ nhanh và phần hỏi đáp.
 
-## Mã gõ nhanh
+## Khi nào Ankey giữ nguyên từ tiếng Anh
 
-Gõ một mã ở đầu từ, mã chạy ngay ở chữ cuối, không cần phím kết thúc:
+Chỉ dựa vào luật Telex thì chưa đủ: `test` thành `tét`, `does` thành `doé` đều đúng luật. Vì vậy Ankey kiểm tra thêm bốn lớp.
 
-| Mã | Việc |
+**1. Phải là âm tiết tiếng Việt.** [`Syllables.swift`](Core/Syllables.swift) chứa danh sách âm tiết tiếng Việt lấy từ Viet74K và hunspell-vi. Chữ sau khi đặt dấu chỉ được chấp nhận nếu khớp với phần đầu của một âm tiết trong danh sách. `doé` không có trong danh sách nên giữ nguyên là `does`.
+
+**2. Danh sách từ tiếng Anh.** Có những từ tiếng Anh đặt dấu xong lại ra âm tiết tiếng Việt hợp lệ (`reset` → `rết`, `test` → `tét`). [`English.swift`](Core/English.swift) sinh tự động: lấy 20.000 từ tiếng Anh thông dụng nhất, giữ lại những từ mà engine sẽ đặt dấu, rồi xếp hạng dạng đã đặt dấu theo tần suất xuất hiện trong tiếng Việt (FrequencyWords, vi).
+
+| Tần suất của dạng đã đặt dấu trong tiếng Việt | Kết quả |
 |---|---|
-| `///feedback` | Mở khung gõ góp ý (hoặc menu bộ gõ → Gửi góp ý…). Enter để gửi, Esc để bỏ. |
-| `///bug` | Như trên, đánh dấu là báo lỗi. |
-| `///ankey` | Mở Cài đặt. |
+| Top 500 | Không đưa vào danh sách, ưu tiên tiếng Việt: `cos` ra `có`, `nos` ra `nó`. |
+| Hạng 500 đến 8000 | Chỉ giữ tiếng Anh khi từ ngay trước cũng là tiếng Anh: `git commit as` giữ nguyên, `cảm own` ra `cảm ơn`. |
+| Hạng 8000 trở đi, hoặc không có trong bảng tần suất | Luôn giữ tiếng Anh: `reset`, `boot`, `list`. |
 
-Gõ sai một chữ thì chữ đã gõ giữ nguyên như bình thường, nên `//`, `http://` và `và/hoặc` không bị ảnh hưởng. Trong khung góp ý, Telex vẫn hoạt động, tối đa 1000 ký tự. Cmd, Ctrl, bấm chuột hoặc chuyển ứng dụng thì huỷ.
+**3. Ngữ cảnh từ trước đó.** Với từ lưỡng nghĩa, Ankey dựa vào từ vừa gõ trước đó là tiếng Anh hay tiếng Việt. Ngữ cảnh này được reset khi gặp dấu chấm, `!`, `?`, Return, Tab, khi chuyển app hoặc khi con trỏ nhảy sang chỗ khác, vì lúc đó các từ cũ không còn liên quan nữa. Từ dính liền với ký tự đặc biệt kiểu code (`my_var`, `user@host`, `foo.bar(x)`) giữ nguyên, trừ khi đứng sau một từ tiếng Việt, nên `ừm...tôi` vẫn đặt dấu bình thường.
 
-Gõ góp ý là lúc duy nhất Ankey gửi chữ bạn gõ, và chỉ khi bạn bấm Enter. Nội dung gửi gồm đoạn bạn gõ, phiên bản macOS, loại chip, bảng mã và chế độ gõ, không có tên ứng dụng. Datadog còn nhận IP và user agent, và giữ 15 ngày.
+**4. Học từ thao tác sửa.** Bạn xoá cả từ rồi gõ lại y hệt, Ankey hiểu là mình đã đoán sai. Gõ `sex` ra `sẽ`, xoá đi gõ lại `sex`: Ankey hiện `sex` luôn và ghi nhớ khi bạn kết thúc từ. Ngược lại cũng vậy: muốn `tét` thay vì `test` thì xoá rồi gõ lại. Ankey chỉ ghi nhớ khi đủ ba điều kiện:
 
-## Phân biệt tiếng Anh và tiếng Việt
+- xoá hết cả từ rồi gõ lại đúng y chuỗi phím cũ;
+- từ dài từ ba ký tự trở lên;
+- từ có trong danh sách tiếng Anh của Ankey (`banj` hay `tooi` không phải tiếng Anh nên không bao giờ bị giữ nguyên).
 
-Chỉ có luật Telex thì chưa đủ. Theo luật, `test` thành `tét` và `does` thành `doé` đều hợp lệ. Nên mình thêm bốn lớp kiểm tra.
+Sửa lỗi chính tả (`sex` thành `sez`), gõ thêm thành từ dài hơn (`sexy`) hay chỉ xoá một phần thì Ankey không ghi nhớ. Các từ đã học nằm ở tab Chung trong Cài đặt, xoá là Ankey quên.
 
-**1. Một từ phải là tiền tố của một âm tiết có thật trong tiếng Việt.** [`Syllables.swift`](Core/Syllables.swift) giữ các âm tiết đơn lấy từ Viet74K và hunspell-vi. Kết quả chuyển đổi chỉ được nhận khi nó còn là tiền tố của một âm tiết trong danh sách. `doé` qua được luật nhưng không có trong danh sách, nên từ đó giữ nguyên.
+Lớp 2, 3, 4 gộp lại thành một điểm số cho mỗi từ: điểm có sẵn theo hạng (0, 1, 2), cộng 1 nếu từ trước là tiếng Anh, cộng điểm học được từ thao tác sửa. Điểm từ 2 trở lên thì giữ nguyên chữ đã gõ. Thao tác sửa đẩy điểm về hẳn một phía (+2 hoặc −2), nên từ đó đổi chiều bất kể từ đứng trước là gì.
 
-**2. Từ tiếng Anh vẫn lọt qua lớp 1 thì có danh sách riêng.** Có những từ tiếng Anh sau khi Telex thêm dấu lại thành âm tiết hợp lệ (`reset` → `rết`, `test` → `tét`). [`English.swift`](Core/English.swift) tìm chúng bằng máy: lấy 20.000 từ tiếng Anh phổ biến nhất, giữ những từ engine sẽ chuyển đổi, rồi xếp hạng dạng đã chuyển theo độ phổ biến trong tiếng Việt (FrequencyWords, vi).
+Chữ cái dính liền một chữ số (`arm64`) giữ nguyên như đã gõ. Các từ hai chữ cái hay gặp khi viết code (`ex`, `er`, `aws`) cũng vậy; `os` và `es` theo ngữ cảnh như `as`.
 
-| Hạng của dạng đã chuyển trong tiếng Việt | Kết quả |
-|---|---|
-| Dưới 500 | Bỏ khỏi danh sách, tiếng Việt thắng: `cos` là `có`, `nos` là `nó`. |
-| 500 đến 8000 | Giữ tiếng Anh chỉ khi đứng ngay sau một từ tiếng Anh: `git commit as` giữ nguyên, `cảm own` chuyển thành `cảm ơn`. |
-| Từ 8000 trở lên, hoặc không có hạng | Luôn giữ tiếng Anh: `reset`, `boot`, `list`. |
+Gõ phím dấu hai lần thì Ankey đoán bạn muốn huỷ dấu hay gõ một từ có hai chữ cái giống nhau. Từ vừa hiện tiếng Việt (`as` ra `á`) rồi bạn bấm thêm phím dấu, mà từ ngắn hơn là tiếng Anh còn từ dài không có trong danh sách, thì phím đó huỷ dấu: `ass` ra `as`, `coss` ra `cos`, `carr` ra `car`. Từ dài là tiếng Anh có trong danh sách (`boss`, `pass`, `loss`) thì giữ nguyên hai chữ cái, và từ đang hiện đúng như gõ (`his`) cũng vậy nên `hiss` giữ nguyên. Muốn gõ `ass`, bấm phím dấu lần thứ ba (`asss` ra `ass`, `cosss` ra `coss`) hoặc bấm Esc khi đang hiện `as`. Riêng phím mũ (`oo`, `ee`, `w`) gõ thêm một lần thì bỏ mũ (`tooo` ra `too`).
 
-**3. Từ đứng trước quyết định ngôn ngữ cho các từ nhập nhằng.** Ankey nhớ từ gần nhất là tiếng Anh hay tiếng Việt. Trí nhớ này bị xoá khi gặp dấu chấm, `!`, `?`, Return, Tab, khi chuyển app, và khi con trỏ nhảy chỗ khác, vì lúc đó các từ gõ trước không còn liên quan tới từ sắp gõ. Từ dính liền với dấu câu của code (`my_var`, `user@host`, `foo.bar(x)`) giữ nguyên, trừ khi đứng sau một từ tiếng Việt, nên `ừm...tôi` vẫn chuyển bình thường.
-
-**4. Xoá cả từ rồi gõ lại đúng phím đó là lời sửa.** `sex` ra `sẽ`, bạn xoá cả từ rồi gõ lại `sex`: Ankey hiểu là chọn nhầm, hiện `sex` ngay và nhớ từ đó khi bạn chốt từ. Chiều ngược lại cũng vậy, `test` ép thành `tét`. Chỉ tính khi xoá hết từ và gõ lại đúng chuỗi phím, từ có từ ba chữ trở lên, và chỉ với từ nằm trong danh sách tiếng Anh có sẵn: `banj` hay `tooi` không phải từ tiếng Anh nên không bao giờ bị giữ nguyên chữ. Sửa lỗi gõ (`sex` thành `sez`), gõ tiếp thành từ dài hơn (`sexy`) hay xoá nửa chừng không đổi gì. Từ đã học hiện ở thẻ Chung, bấm xoá là quên.
-
-Ba lớp sau cùng là một điểm số cho mỗi từ: hạng có sẵn (0, 1, 2), cộng một khi từ trước là tiếng Anh, cộng điểm đã học từ lời sửa. Từ đạt 2 trở lên thì giữ nguyên chữ đã gõ. Lời sửa đẩy điểm tới đầu bên kia (+2 hoặc −2), nên từ đổi chiều sau mọi từ đứng trước.
-
-Gõ phím dấu hai lần (`coss`) không huỷ dấu để ra `cos`: tiếng Anh có nhiều từ kết thúc bằng hai chữ như vậy (`boss`, `pass`, `harass`) và Ankey giữ nguyên chúng. Muốn `cos`, bấm Esc khi đang hiện `có`, hoặc xoá cả từ rồi gõ lại. Phím mũ (`oo`, `ee`, `w`) gõ thêm một lần thì huỷ mũ (`tooo` ra `too`).
-
-Các danh sách có sẵn nằm trong code, không nằm trong settings đã lưu, để mỗi lần cập nhật đều tới được cả những người đã chỉnh settings riêng.
+Các danh sách này nằm trong code chứ không lưu vào settings, nên mỗi lần cập nhật ai cũng nhận được bản mới, kể cả người đã chỉnh settings riêng.
 
 ## Render từ phím thô
 
@@ -63,25 +57,31 @@ Engine không sửa chữ đang hiện trên màn hình. Nó giữ **các phím 
 - Esc trả về phím thô. Nếu Ankey đã đổi `test` thành `tét`, một lần Esc cho lại `test`.
 - Shift+Esc đảo cách đọc của từ đang gõ và giữ từ mở: `test` giữ nguyên thì ra `tét`, `có` thì ra `cos`, bấm lần nữa để quay lại. Gõ thêm hoặc xoá một phím thì từ đọc lại từ đầu. Từ chỉ có một cách đọc (`hello`) không đổi. Shift+Esc không dạy Ankey gì; muốn Ankey nhớ thì xoá cả từ rồi gõ lại.
 
-Vì thấy cả từ nên phím dấu không cần đúng thứ tự. `vieetj` và `vietej` đều ra `việt`. `duwocj` và `duocwj` đều ra `dược`. Phím mũ có thể đến sau các nguyên âm theo sau (`vayaj` → `vậy`, `toio` → `tôi`) hoặc sau phụ âm cuối. Phím dấu thanh nằm ngay trước phím mũ thì phá cặp, nên `verse` và `reference` giữ nguyên mọi chữ.
+## Tài nguyên
 
-## Thống kê
+Tab Thống kê trong Cài đặt có mục Tài nguyên: bộ nhớ (kèm mức đỉnh), CPU, số luồng, thời gian chạy và kích thước chỉ mục gợi ý của chính Ankey, cập nhật mỗi giây khi tab mở, kèm biểu đồ 60 giây gần nhất. Số đo chỉ nằm trên máy, không lưu và không gửi đi. Nếu nghi Ankey ngốn RAM, mở tab này vài lần trong ngày và nhìn dòng Bộ nhớ.
 
-Ankey không gửi gì đi, trừ khi bạn tự gửi góp ý (mục trên) hoặc bật trong Cài đặt → Thống kê. Thống kê có hai công tắc, cả hai mặc định tắt.
+## Gợi ý cụm từ
 
-- **Ghi thống kê trên máy.** Ankey đếm số lần: từ được đổi dấu, từ giữ nguyên, Esc trả lại chữ đã gõ, lần Shift+Esc đảo cách đọc (hai chiều), lần Ankey học lại một từ từ lời sửa (hai chiều), chèn trực tiếp bị lệch. Chỉ lưu trên máy, giữ 30 ngày. Tắt là xoá hết.
-- **Gửi thống kê tới Datadog.** Mỗi ngày gửi tối đa một lần, chỉ các ngày đã qua. Nút Sao chép trong tab Thống kê đưa đúng dữ liệu sẽ gửi vào clipboard.
+Sau một từ trở lên cách nhau bằng dấu cách, nếu các từ vừa gõ gần như luôn được theo sau bởi cùng một chuỗi âm tiết thì Ankey hiện chuỗi đó ngay sau con trỏ, gạch chân như chữ đang gõ (`cuộc chiến thương` hiện `mại`, `ung` hiện `thư`), và Tab đưa nó vào văn bản. Esc và Backspace chỉ tắt gợi ý, không gửi phím cho ứng dụng. Gõ tiếp, bấm phím khác hoặc bấm chuột thì gợi ý biến mất. Ứng dụng đặt ở chế độ chèn trực tiếp không có gợi ý, vì Chrome và các app Chromium chỉ coi Tab và Esc là của bộ gõ khi đang có chữ gạch chân. Tắt ở Cài đặt, mục Gợi ý cụm từ.
 
-Không bao giờ lưu hay gửi chữ bạn gõ, phím bấm hay tên ứng dụng. Các trường được gửi nằm trong danh sách cố định ở `Tests/TestMain.swift`, thêm một trường mới thì test đỏ cho tới khi danh sách đổi theo.
+Danh sách [`Resources/phrases.txt`](Resources/phrases.txt) không phải từ điển. Nó là các cụm đếm được từ khoảng 100 triệu từ tiếng Việt thật (phụ đề OpenSubtitles và văn bản web CCMatrix), do [`tools/phrases/ngrams.py`](tools/phrases/ngrams.py) tạo ra. Một âm tiết chỉ được gợi ý khi nó đứng sau các từ đã gõ trong ít nhất 99% lần xuất hiện, hoặc 95% nếu nó hoàn thành một từ ghép trong từ điển Viet74K. Chuỗi gợi ý dài đến khi tỉ lệ đó còn giữ được. Chỗ nào các cụm tách nhau thì Ankey không gợi ý. Từ tục được lọc khỏi danh sách.
 
-Khi bạn bật gửi, Datadog nhận:
+Trên văn bản giữ riêng chưa dùng để đếm, gợi ý đúng 97 đến 98% (hội thoại và web) và 97% trên văn xuôi Wikipedia, và hiện ở khoảng 2 đến 4% số từ gõ. Số này đo ở bước tạo danh sách, không phải trong lúc gõ thật.
 
-- số liệu đã đếm (nút Sao chép trong tab Thống kê cho xem đúng nội dung), cùng phiên bản Ankey, phiên bản macOS, kiểu đặt dấu, bảng mã và số luật theo ứng dụng (chỉ số lượng, không có tên);
-- một ID ngẫu nhiên của bản cài này, tạo khi bật gửi và bỏ khi tắt;
-- địa chỉ IP và user agent (`Ankey/<phiên bản> (macOS <phiên bản>)`) của máy bạn, vì mọi kết nối mạng đều gửi hai thứ đó.
+### Học cụm từ của bạn
 
-Datadog Logs không xoá được dữ liệu theo từng ID. Số liệu đã gửi nằm ở đó tới khi hết hạn lưu giữ của Datadog.
+Danh sách chung không có tên dự án hay thuật ngữ của riêng bạn. Bật "Học cụm từ bạn hay gõ" trong Cài đặt thì Ankey đếm những cụm bạn gõ lặp lại và gợi ý chúng, ưu tiên hơn danh sách chung. Tính năng này tắt mặc định vì nó lưu chữ bạn gõ: trong một file chỉ bạn đọc được (`~/Library/Application Support/Ankey/personal-phrases.json`), không gửi đi đâu, xem và xoá từng cụm hay xoá hết ngay trong Cài đặt.
 
-## Cảm ơn
+Bộ nhớ có trần cứng, nên cái mới vào thì cái ít giá trị nhất phải ra:
+- Một cụm chỉ được lưu từ lần gặp thứ hai (Ankey nhớ lần đầu bằng một bảng băm 32.768 ô, ô mới ghi đè ô cũ) và được gợi ý từ lần thứ ba. Phần lớn cụm chỉ gõ một lần nên không bao giờ chiếm chỗ.
+- Tối đa 6.000 tiền tố (1 đến 3 từ), mỗi tiền tố giữ tối đa 4 từ theo sau. Tối đa khoảng 6 MB RAM và 2 MB đĩa khi đầy.
+- Vượt trần thì bỏ 10% tiền tố có điểm thấp nhất. Điểm là số lần từ dẫn đầu xuất hiện (chặn ở 50) nhân bình phương tỉ lệ của nó, nhân hệ số giảm một nửa sau mỗi 45 ngày không gặp. Tiền tố mà mọi từ đều theo sau (`có`, `không`) vì thế không bao giờ giữ được chỗ, còn một tên riêng luôn theo sau bởi cùng một từ thì giữ được từ lần thứ ba.
+- Số đếm cũ mờ đi theo thời gian như trên, và mỗi lần một tiền tố xuất hiện thì số đếm của nó giảm thêm 3%, nên một tiền tố chỉ nhớ khoảng 30 lần gần nhất. Cụm đã học rất chắc mà bạn đổi sang cụm khác thì Ankey thôi gợi cụm cũ sau chưa đầy chục lần và gợi cụm mới sau khoảng 50 lần, không phụ thuộc cụm cũ đã gõ bao nhiêu lần. Thói quen ổn định vẫn được nhận ra như cũ.
+- Cái danh sách chung đã đoán đúng thì không lưu.
 
-Cảm ơn **FireGroup** đã tài trợ tài khoản Apple Developer dùng để ký và notarize Ankey.
+### Học khi nào bạn gõ tiếng Anh
+
+Điểm quyết định một chữ là tiếng Anh hay tiếng Việt chỉ biết ngôn ngữ của từ liền trước. Chữ tiếng Anh đầu tiên sau chữ Việt vì thế không được giúp gì: `as` sau `tôi dùng` vẫn ra `á`. Bật "Học khi nào bạn gõ tiếng Anh" thì Ankey nhớ sau từ nào bạn thường gõ tiếng Anh hay tiếng Việt, và khi một chữ có thể là cả hai thì cộng hoặc trừ một điểm theo thói quen đó (cùng cỡ với điểm của từ liền trước). Một từ chỉ "nghiêng" khi có ít nhất 8 mẫu và 90% thuộc một thứ tiếng. Thói quen tiếng Việt không bao giờ biến một từ tiếng Anh luôn nằm trong danh sách (`test`) thành tiếng Việt.
+
+Ankey chỉ học từ những chữ chắc chắn (không nằm trong danh sách tiếng Anh, nên điểm không quyết định chúng) và từ những lần bạn tự chọn: Esc, Shift+Esc, xoá rồi gõ lại, mỗi lần tính bằng 4 mẫu. Học từ chính các quyết định mơ hồ của Ankey sẽ tự củng cố lỗi của nó, nên không làm vậy. Bảng có trần 4.000 từ đứng trước (khoảng 1 MB), mỗi từ giữ hai bộ đếm, số đếm giảm một nửa sau 60 ngày không gặp, mỗi lần ghi thêm một mẫu thì cả hai bộ đếm giảm thêm 3% (nên một từ chỉ nhớ khoảng 30 mẫu gần nhất: thói quen đã học rất chắc mà bạn đổi hẳn thì Ankey thôi nghiêng sau chưa đầy chục lần và nghiêng sang bên mới sau khoảng 70 lần, không phụ thuộc cái cũ đã học bao nhiêu lần),, và khi đầy thì bỏ 10% từ có điểm thấp nhất, điểm là số mẫu (chặn ở 50) nhân bình phương độ nghiêng. Tắt mặc định vì file `language-habits.json` chứa các từ bạn gõ. Xem và xoá từng từ trong Cài đặt.

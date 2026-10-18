@@ -7,6 +7,10 @@ final class AnkeyInputController: IMKInputController {
     private let anywhere = NSRange(location: NSNotFound, length: NSNotFound)
     /// Direct insertion only: the word as it sits in the document right now.
     private var shown = DirectWord()
+    /// The rest of a phrase, shown as marked text after the caret, which Tab puts in the document. Marked text
+    /// is how Chrome and other Chromium apps know the input method has claimed a key: without it Tab and Esc
+    /// reach the page as well.
+    private var suggestion: String?
 
     private struct Context {
         let settings: Settings
@@ -14,7 +18,8 @@ final class AnkeyInputController: IMKInputController {
     }
 
     private func context(_ sender: Any!) -> Context {
-        let stored = Settings.load()
+        var stored = Settings.load()
+        if stored.learnsLanguage { stored.habits = LanguageHabitsStore.shared.snapshot() }
         let rule = stored.rule(for: textClient(sender)?.bundleIdentifier())
         return Context(settings: stored, rule: rule)
     }
@@ -44,6 +49,16 @@ final class AnkeyInputController: IMKInputController {
             break
         default:
             return false
+        }
+        if let text = suggestion {
+            let plain = event.modifierFlags.isDisjoint(with: [.shift, .command, .control, .option])
+            if plain, event.keyCode == Self.tabKey {
+                accept(text, sender)
+                return true
+            }
+            hideSuggestion(sender)
+            // Esc and Backspace only dismiss it; any other key goes on as usual.
+            if plain, event.keyCode == Self.escapeKey || event.keyCode == Self.backspaceKey { return true }
         }
         if MainActor.assumeIsolated({ FeedbackFlow.shared.isActive }) { return captureKey(event, sender) }
         if !event.modifierFlags.isDisjoint(with: [.command, .control]) {
@@ -77,6 +92,8 @@ final class AnkeyInputController: IMKInputController {
         53: #selector(NSResponder.cancelOperation(_:)),
     ]
     private static let escapeKey: UInt16 = 53
+    private static let tabKey: UInt16 = 48
+    private static let backspaceKey: UInt16 = 51
 
     override func inputText(_ string: String!, client sender: Any!) -> Bool {
         let ctx = context(sender)
@@ -95,8 +112,7 @@ final class AnkeyInputController: IMKInputController {
         case .pass:
             return false
         case .commit:
-            commit(sender, ctx)
-            return false
+            return commit(sender, ctx, endedBy: ch)
         case .flush:
             commit(sender, ctx)
             return inputText(string, client: sender)
@@ -135,7 +151,9 @@ final class AnkeyInputController: IMKInputController {
             }
             if session.display(ctx.settings) != session.raw {
                 StatsStore.record(.escRestoredRaw)
-                finalize(session.finishRaw(), sender, ctx)
+                let raw = session.finishRaw()
+                noteHabit(ctx)
+                finalize(raw, sender, ctx)
                 return true
             }
             guard ctx.settings.escClears else {
@@ -171,10 +189,14 @@ final class AnkeyInputController: IMKInputController {
     }
 
     override func commitComposition(_ sender: Any!) {
+        hideSuggestion(sender)
         commit(sender, context(sender))
     }
 
     override func deactivateServer(_ sender: Any!) {
+        PersonalPhrasesStore.shared.flush()
+        LanguageHabitsStore.shared.flush()
+        hideSuggestion(sender)
         endCapture()
         commit(sender, context(sender))
         session.forgetContext()
@@ -257,12 +279,17 @@ final class AnkeyInputController: IMKInputController {
 
     /// The caret may now sit anywhere, so the words typed before say nothing about the next one.
     private func leaveWord(_ sender: Any!) {
+        hideSuggestion(sender)
         endCapture()
         commit(sender, context(sender))
         session.forgetContext()
     }
 
-    private func commit(_ sender: Any!, _ ctx: Context) {
+    /// Finishes the word. True when the key that ended it is used up here: after a word ended by a space that
+    /// has a suggestion, the space goes in with the word and the suggestion is placed after it, so the app's
+    /// own space cannot overwrite the suggestion.
+    @discardableResult
+    private func commit(_ sender: Any!, _ ctx: Context, endedBy key: Character? = nil) -> Bool {
         let raw = session.raw
         let word = session.finish(ctx.settings)
         if let correction = session.learned {
@@ -270,7 +297,56 @@ final class AnkeyInputController: IMKInputController {
             StatsStore.record(correction.adjust > 0 ? .correctionToEnglish : .correctionToVietnamese)
         }
         if let event = statsEvent(raw: raw, committed: word) { StatsStore.record(event) }
+        learn(from: session.transition, ctx)
+        noteHabit(ctx)
+        if key == " ", !word.isEmpty, ctx.settings.suggestions, ctx.rule.insertion == .marked,
+           let phrases = PhraseIndex.bundled, let rest = suggestion(for: ctx, in: phrases),
+           let client = textClient(sender) {
+            client.insertText(word + " ", replacementRange: anywhere)
+            client.setMarkedText(rest, selectionRange: NSRange(location: 0, length: 0), replacementRange: anywhere)
+            suggestion = rest
+            return true
+        }
         finalize(word, sender, ctx)
+        return false
+    }
+
+    /// The rest of the phrase, from what this user types if they chose to teach Ankey, then from the shared list.
+    private func suggestion(for ctx: Context, in index: PhraseIndex) -> String? {
+        guard ctx.settings.learnsPhrases else { return session.suggestion(ctx.settings, in: index) }
+        return PersonalPhrasesStore.shared.read {
+            session.suggestion(ctx.settings, in: index, personal: $0, today: PersonalPhrasesStore.today)
+        }
+    }
+
+    /// Counts the word just finished after the words before it. What the shared list already predicts is left
+    /// out, so the room goes to what only this user writes.
+    private func learn(from transition: (context: [String], word: String)?, _ ctx: Context) {
+        guard ctx.settings.learnsPhrases, ctx.rule.enabled, let transition else { return }
+        let covered = PhraseIndex.bundled?.certain(after: transition.context)?.first
+            .map { Suggest.key($0) == Suggest.key(transition.word) } ?? false
+        PersonalPhrasesStore.shared.observe(context: transition.context, word: transition.word, covered: covered)
+    }
+
+    /// What the word finished says about which language the user writes after the word before it, and whether
+    /// that habit changed what the word showed.
+    private func noteHabit(_ ctx: Context) {
+        if let flipped = session.habitFlipped { StatsStore.record(flipped == .english ? .habitToEnglish : .habitToVietnamese) }
+        guard ctx.settings.learnsLanguage, ctx.rule.enabled, let observed = session.observed else { return }
+        LanguageHabitsStore.shared.observe(after: observed.previous, language: observed.language, weight: observed.weight)
+    }
+
+    private func accept(_ text: String, _ sender: Any!) {
+        suggestion = nil
+        textClient(sender)?.insertText(text, replacementRange: anywhere)
+        session.accepted()
+    }
+
+    /// Takes the suggestion back out of the document. It was only ever marked text, never committed.
+    private func hideSuggestion(_ sender: Any!) {
+        guard suggestion != nil else { return }
+        suggestion = nil
+        textClient(sender)?.setMarkedText("", selectionRange: NSRange(location: 0, length: 0), replacementRange: anywhere)
     }
 
     /// Puts the finished word in the document and leaves nothing pending.

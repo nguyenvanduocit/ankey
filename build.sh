@@ -17,6 +17,12 @@ swiftc -swift-version 5 -target arm64-apple-macosx13.0 \
 
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
+
+# The phrase list is packed into the index Ankey maps at run time.
+swiftc -swift-version 5 -target arm64-apple-macosx13.0 \
+    -o /tmp/ankey-mkphrases \
+    "$ROOT"/Core/*.swift "$ROOT"/tools/mkphrases/main.swift
+/tmp/ankey-mkphrases "$ROOT/Resources/phrases.txt" "$APP/Contents/Resources/phrases.idx"
 cp "$ROOT/Info.plist" "$APP/Contents/Info.plist"
 cp "$ROOT/Resources/Ankey.tiff" "$ROOT/Resources/AppIcon.icns" "$ROOT/Resources/VT323-Regular.ttf" "$ROOT/Resources/VT323-OFL.txt" "$APP/Contents/Resources/"
 printf 'APPL????' > "$APP/Contents/PkgInfo"

@@ -173,7 +173,7 @@ struct HelpView: View {
     let onFinish: () -> Void
 
     private static let questions: [(question: String, answer: String)] = [
-        // README "Phân biệt tiếng Anh và tiếng Việt"; `Session.correction`; Settings → Chung → Từ Ankey đã học.
+        // README "Khi nào Ankey giữ nguyên từ tiếng Anh"; `Session.correction`; Settings → Chung → Từ Ankey đã học.
         ("Sao chữ tiếng Anh không bị đổi dấu?",
          "Ankey chỉ đổi khi kết quả là một âm tiết tiếng Việt có thật, và đã có sẵn hơn 200 từ tiếng Anh hay gặp như reset, test. Từ nào vẫn đổi nhầm thì xoá cả từ rồi gõ lại đúng phím đó: Ankey nhớ và để từ ấy nguyên chữ đã gõ. Xem và xoá các từ đã nhớ ở thẻ Chung."),
         // InputController cancelOperation; Settings → Chung → Esc huỷ từ đang gõ.
@@ -185,7 +185,7 @@ struct HelpView: View {
         // `Trigger.all`; the Gửi góp ý… item in `AnkeyInputController.menu()`; FeedbackFlow key handling.
         ("Báo lỗi hoặc góp ý thế nào?",
          "Gõ ///feedback (góp ý) hay ///bug (báo lỗi) ở đầu từ, hoặc chọn Gửi góp ý… trong menu bộ gõ. Gõ nội dung rồi bấm Enter để gửi."),
-        // README "Mã gõ nhanh"; FeedbackFlow key handling; FeedbackHUD note.
+        // FeedbackFlow key handling; FeedbackHUD note.
         ("///feedback gửi gì, ai nhận?",
          "Chỉ gửi khi bạn bấm Enter, Esc để bỏ. Gửi đoạn bạn gõ cùng macOS, chip, chế độ gõ, không có tên ứng dụng. Datadog còn nhận IP và user agent của bạn."),
         // Settings → Cập nhật footer; the update item in the input menu.

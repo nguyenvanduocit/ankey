@@ -35,6 +35,16 @@ struct Session {
     private var swapped = false
     /// What the last finished word learned: it was erased and typed again, and it showed the other language.
     private(set) var learned: Correction?
+    /// The last finished word and the words before it in the run, for learning phrases. Nil when it had none.
+    private(set) var transition: (context: [String], word: String)?
+    /// What the last finished word says about the user's habit: the word before it, the language it showed and
+    /// how much it counts. Nil when it says nothing, because its language was in doubt.
+    private(set) var observed: (previous: String, language: Language, weight: Double)?
+    /// The language a word showed because of the user's habit, when the habit changed what it showed.
+    private(set) var habitFlipped: Language?
+    /// The last words finished since the last break, each one ended by a space, as many as Suggest reads. A
+    /// letter, a click or a backspace that reaches the app, or any other key, ends the run.
+    private var phrase: [String] = []
 
     /// Keys that join two words into one code token. Only characters that never open a phrase in
     /// prose are here: `/` (và/hoặc), brackets (`[hoàn thành]`) and `*` (bold) also appear in Vietnamese.
@@ -60,13 +70,21 @@ struct Session {
     /// The verdict for the typed keys. A word that is erased and typed again shows the other language at once,
     /// and the correction is what it learns when it is committed.
     private func read(_ settings: Settings) -> (verdict: Engine.Verdict, correction: Correction?) {
-        let verdict = Engine.analyze(raw, settings, after: previous, glued: glued)
+        let verdict = Engine.analyze(raw, settings, after: previous, habit: habit(settings), glued: glued || endsInDigit)
         guard erasure.matches(raw), verdict.contested else { return (verdict, nil) }
         let correction = Correction(word: raw.lowercased(), adjust: verdict.language == .english ? -Engine.adjustLimit : Engine.adjustLimit)
         var flipped = settings
         flipped.adjust[correction.word] = correction.adjust
-        return (Engine.analyze(raw, flipped, after: previous, glued: glued), correction)
+        return (Engine.analyze(raw, flipped, after: previous, habit: habit(settings), glued: glued || endsInDigit), correction)
     }
+
+    /// The language the user nearly always writes after the word before this one.
+    private func habit(_ settings: Settings) -> Language? {
+        settings.habits.lean(after: phrase.last)
+    }
+
+    /// A digit right after the letters ties them to it (`arm64`, `utf8`): the word is a name, not Vietnamese.
+    private var endsInDigit: Bool { boundary?.isASCII == true && boundary?.isNumber == true }
 
     /// A dot glues words in `foo.bar` and `README.md`, not after Vietnamese (`ừm...tôi`).
     private static func glues(_ ch: Character, afterVietnamese: Bool) -> Bool {
@@ -80,6 +98,22 @@ struct Session {
         let language = verdict.language
         let keys = raw
         let endedByKey = boundary != nil
+        // What the word says about the habit: a word the user chose by hand counts for more than one whose
+        // language was never in doubt (not listed as English, so the score never decided it).
+        let chosen = swapped || correction != nil
+        if let previousWord = phrase.last, !text.isEmpty, !isHolding, let language,
+           chosen || (!verdict.contested && !glued && English.band[keys.lowercased()] == nil) {
+            observed = (previousWord, language, chosen ? LanguageHabits.chosenWeight : 1)
+        } else {
+            observed = nil
+        }
+        habitFlipped = nil
+        if !isHolding, !chosen, habit(settings) != nil {
+            let without = Engine.analyze(keys, settings, after: previous, glued: glued || endsInDigit)
+            if without.text != verdict.text { habitFlipped = verdict.language }
+        }
+        transition = !text.isEmpty && !phrase.isEmpty ? (phrase, text) : nil
+        if boundary == " ", !text.isEmpty { phrase = Array((phrase + [text]).suffix(Suggest.maxWords)) } else { phrase = [] }
         glued = boundary.map { Self.glues($0, afterVietnamese: language == .vietnamese) } ?? false
         afterVietnamese = language == .vietnamese
         boundary = nil
@@ -101,6 +135,9 @@ struct Session {
     /// The typed keys as they are. The word counts as English from here on.
     mutating func finishRaw() -> String {
         let text = isHolding ? held : raw
+        // Esc gave the typed keys back: in this place the user wanted English.
+        observed = phrase.last.flatMap { isHolding || raw.isEmpty ? nil : ($0, .english, LanguageHabits.chosenWeight) }
+        habitFlipped = nil
         raw = ""
         held = ""
         swapped = false
@@ -110,11 +147,29 @@ struct Session {
         afterVietnamese = false
         boundary = nil
         learned = nil
+        phrase = []
         erasure.reset()
         return text
     }
 
+    /// What the words typed so far can only continue with, or nil.
+    func suggestion(
+        _ settings: Settings, in index: PhraseIndex, personal: PersonalPhrases? = nil, today: Int = 0
+    ) -> String? {
+        Suggest.completion(after: phrase, style: settings.toneStyle, in: index, personal: personal, today: today)
+    }
+
+    /// The suggestion went into the document: the text counts as Vietnamese typed, and a new phrase starts.
+    mutating func accepted() {
+        phrase = []
+        previous = .vietnamese
+        afterVietnamese = true
+        glued = false
+        erasure.reset()
+    }
+
     mutating func forgetContext() {
+        phrase = []
         previous = nil
         glued = false
         afterVietnamese = false
@@ -140,6 +195,7 @@ struct Session {
         let sentenceEnd = ".!?".contains(ch)
         if raw.isEmpty {
             erasure.reset()
+            phrase = []
             if sentenceEnd { previous = nil }
             glued = Self.glues(ch, afterVietnamese: afterVietnamese)
             if ch != "." { afterVietnamese = false }
@@ -189,6 +245,7 @@ struct Session {
 
     /// A backspace that went to the app because no word was composing.
     mutating func deleted() {
+        phrase = []
         erasure.deleted()
     }
 
@@ -211,6 +268,7 @@ struct Session {
         held = ""
         swapped = false
         learned = nil
+        phrase = []
         erasure.reset()
     }
 }
@@ -289,19 +347,23 @@ enum Engine {
         var contested = false
     }
 
-    /// `previous` is the language of the word before it.
+    /// `previous` is the language of the word before it. `habit` is the language the user nearly always writes
+    /// after that word: it adds to the English side, and takes from it only for a word the lists do not give
+    /// to English everywhere, so `test` stays `test` after any word.
     static func analyze(
-        _ raw: String, _ settings: Settings, after previous: Language?, glued: Bool = false
+        _ raw: String, _ settings: Settings, after previous: Language?, habit: Language? = nil, glued: Bool = false
     ) -> Verdict {
         let (atoms, tone, out, literal) = telex(raw, settings)
         let language: Language? = out == literal ? nil : .vietnamese
         guard settings.restoreRaw else { return Verdict(text: out, language: language) }
         if glued { return Verdict(text: literal, language: .english) }
+        if let undone = toneUndo(raw, settings, after: previous) { return Verdict(text: undone, language: .english) }
         let word = raw.lowercased()
         // How English the word looks: its built-in band, one more right after an English word, plus what Ankey
         // learned from corrections. The syllable check runs only for the few words the lists know.
         let band = English.band[word]
-        let score = (band ?? 0) + (previous == .english ? 1 : 0) + (settings.adjust[word] ?? 0)
+        let habitScore = habit == .english ? 1 : habit == .vietnamese && (band ?? 0) < englishThreshold ? -1 : 0
+        let score = (band ?? 0) + (previous == .english ? 1 : 0) + (settings.adjust[word] ?? 0) + habitScore
         let listed = band != nil && out != literal
         if score >= englishThreshold {
             let contested = listed && isSyllable(atoms, tone, out, settings)
@@ -309,6 +371,25 @@ enum Engine {
         }
         guard isSyllable(atoms, tone, out, settings) else { return Verdict(text: literal, language: .english) }
         return Verdict(text: out, language: language, contested: listed)
+    }
+
+    /// The text of a tone key typed twice, when the second press undoes the tone (`as` showed `á`, so `ass` is
+    /// `as`). The keys before the repeat must have shown Vietnamese, and the English word must be the one without
+    /// the repeat: `ass`, `boss` and `pass` are listed words of their own and keep both letters, `his` stays English
+    /// at the first press so `hiss` keeps both too.
+    private static func toneUndo(_ raw: String, _ settings: Settings, after previous: Language?) -> String? {
+        let word = raw.lowercased()
+        // The third press is the letter itself: `as` and `s` undid the tone, one more `s` gives `ass`.
+        if let key = word.last, telexTone[key] != nil, word.hasSuffix(String(repeating: key, count: 3)),
+           word.dropLast(3).last != key {
+            return toneUndo(String(raw.dropLast()), settings, after: previous) == nil ? nil : telex(raw, settings).out
+        }
+        guard let key = word.last, word.dropLast().last == key, let tone = telexTone[key],
+              English.band[word] == nil, English.knows(String(word.dropLast())) else { return nil }
+        let prefix = String(raw.dropLast())
+        guard telex(prefix, settings).tone == tone, analyze(prefix, settings, after: previous).language == .vietnamese
+        else { return nil }
+        return telex(raw, settings).out
     }
 
     /// The other reading of the keys: the typed keys when the verdict shows the Telex text, the Telex text when
