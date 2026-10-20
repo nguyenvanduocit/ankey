@@ -1,5 +1,12 @@
 import Foundation
 
+/// The rest of a phrase and where it came from.
+struct Suggestion: Equatable {
+    var text: String
+    /// It came from what this user typed, not from the shared list.
+    var personal: Bool
+}
+
 /// The rest of a phrase, offered when the words just typed can only go on one way.
 ///
 /// What counts as certain comes from the phrase list (`Resources/phrases.txt`, packed by `PhraseIndex`): the
@@ -14,9 +21,9 @@ enum Suggest {
     static func completion(
         after words: [String], style: ToneStyle, in index: PhraseIndex,
         personal: PersonalPhrases? = nil, today: Int = 0
-    ) -> String? {
-        if let own = personal?.certain(after: words, today: today) { return styled(own, style) }
-        return index.certain(after: words).map { styled($0, style) }
+    ) -> Suggestion? {
+        if let own = personal?.certain(after: words, today: today) { return Suggestion(text: styled(own, style), personal: true) }
+        return index.certain(after: words).map { Suggestion(text: styled($0, style), personal: false) }
     }
 
     /// Syllables compare without the tone placement: `hoà` and `hòa` are the same key.

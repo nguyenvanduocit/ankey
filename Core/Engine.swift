@@ -155,7 +155,7 @@ struct Session {
     /// What the words typed so far can only continue with, or nil.
     func suggestion(
         _ settings: Settings, in index: PhraseIndex, personal: PersonalPhrases? = nil, today: Int = 0
-    ) -> String? {
+    ) -> Suggestion? {
         Suggest.completion(after: phrase, style: settings.toneStyle, in: index, personal: personal, today: today)
     }
 

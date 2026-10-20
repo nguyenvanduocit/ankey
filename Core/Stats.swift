@@ -22,6 +22,19 @@ enum StatsEvent: String, CaseIterable {
     case habitToEnglish
     /// What the user usually writes after the word before made a word that could be either convert.
     case habitToVietnamese
+    /// The shared phrase list offered the rest of a phrase. Shown less accepted less dismissed is how often the
+    /// user typed on past it.
+    case sharedSuggestionShown
+    /// Tab put a suggestion from the shared list in the document.
+    case sharedSuggestionAccepted
+    /// Esc or Backspace took a suggestion from the shared list away.
+    case sharedSuggestionDismissed
+    /// What the user typed before offered the rest of a phrase.
+    case personalSuggestionShown
+    /// Tab put a suggestion learned from the user in the document.
+    case personalSuggestionAccepted
+    /// Esc or Backspace took a suggestion learned from the user away.
+    case personalSuggestionDismissed
 }
 
 /// The counters of one day.

@@ -10,7 +10,7 @@ final class AnkeyInputController: IMKInputController {
     /// The rest of a phrase, shown as marked text after the caret, which Tab puts in the document. Marked text
     /// is how Chrome and other Chromium apps know the input method has claimed a key: without it Tab and Esc
     /// reach the page as well.
-    private var suggestion: String?
+    private var suggestion: Suggestion?
 
     private struct Context {
         let settings: Settings
@@ -50,15 +50,19 @@ final class AnkeyInputController: IMKInputController {
         default:
             return false
         }
-        if let text = suggestion {
+        if let shown = suggestion {
             let plain = event.modifierFlags.isDisjoint(with: [.shift, .command, .control, .option])
             if plain, event.keyCode == Self.tabKey {
-                accept(text, sender)
+                StatsStore.record(shown.personal ? .personalSuggestionAccepted : .sharedSuggestionAccepted)
+                accept(shown.text, sender)
                 return true
             }
             hideSuggestion(sender)
             // Esc and Backspace only dismiss it; any other key goes on as usual.
-            if plain, event.keyCode == Self.escapeKey || event.keyCode == Self.backspaceKey { return true }
+            if plain, event.keyCode == Self.escapeKey || event.keyCode == Self.backspaceKey {
+                StatsStore.record(shown.personal ? .personalSuggestionDismissed : .sharedSuggestionDismissed)
+                return true
+            }
         }
         if MainActor.assumeIsolated({ FeedbackFlow.shared.isActive }) { return captureKey(event, sender) }
         if !event.modifierFlags.isDisjoint(with: [.command, .control]) {
@@ -303,8 +307,9 @@ final class AnkeyInputController: IMKInputController {
            let phrases = PhraseIndex.bundled, let rest = suggestion(for: ctx, in: phrases),
            let client = textClient(sender) {
             client.insertText(word + " ", replacementRange: anywhere)
-            client.setMarkedText(rest, selectionRange: NSRange(location: 0, length: 0), replacementRange: anywhere)
+            client.setMarkedText(rest.text, selectionRange: NSRange(location: 0, length: 0), replacementRange: anywhere)
             suggestion = rest
+            StatsStore.record(rest.personal ? .personalSuggestionShown : .sharedSuggestionShown)
             return true
         }
         finalize(word, sender, ctx)
@@ -312,7 +317,7 @@ final class AnkeyInputController: IMKInputController {
     }
 
     /// The rest of the phrase, from what this user types if they chose to teach Ankey, then from the shared list.
-    private func suggestion(for ctx: Context, in index: PhraseIndex) -> String? {
+    private func suggestion(for ctx: Context, in index: PhraseIndex) -> Suggestion? {
         guard ctx.settings.learnsPhrases else { return session.suggestion(ctx.settings, in: index) }
         return PersonalPhrasesStore.shared.read {
             session.suggestion(ctx.settings, in: index, personal: $0, today: PersonalPhrasesStore.today)

@@ -712,7 +712,7 @@ func checkSuggest() {
         return index
     }
     func rest(_ typed: String, _ index: PhraseIndex, _ style: ToneStyle = .modern) -> String? {
-        Suggest.completion(after: typed.split(separator: " ").map(String.init), style: style, in: index)
+        Suggest.completion(after: typed.split(separator: " ").map(String.init), style: style, in: index)?.text
     }
 
     // What every phrase through the typed words agrees on, up to where they split or one ends.
@@ -763,31 +763,31 @@ func checkSuggest() {
         _ = session.finish(settings)
     }
     word("lowx")
-    expect(session.suggestion(settings, in: phrases), "vận sa cơ", "after one word")
+    expect(session.suggestion(settings, in: phrases)?.text, "vận sa cơ", "after one word")
     word("vaajn")
-    expect(session.suggestion(settings, in: phrases), "sa cơ", "after two words")
+    expect(session.suggestion(settings, in: phrases)?.text, "sa cơ", "after two words")
     word("sa")
-    expect(session.suggestion(settings, in: phrases), "cơ", "after three words")
+    expect(session.suggestion(settings, in: phrases)?.text, "cơ", "after three words")
     _ = session.push("c")
-    expect(session.suggestion(settings, in: phrases), "cơ", "a letter typed keeps the run")
+    expect(session.suggestion(settings, in: phrases)?.text, "cơ", "a letter typed keeps the run")
     _ = session.pop()
     session.deleted()
-    expect(session.suggestion(settings, in: phrases), nil, "a backspace to the app ends it")
+    expect(session.suggestion(settings, in: phrases)?.text, nil, "a backspace to the app ends it")
     word("lowx"); word("vaajn"); word("sa", ",")
-    expect(session.suggestion(settings, in: phrases), nil, "a comma ends it")
+    expect(session.suggestion(settings, in: phrases)?.text, nil, "a comma ends it")
     word("lowx"); word("vaajn"); word("sa")
     _ = session.push(" ")
-    expect(session.suggestion(settings, in: phrases), nil, "a second space ends it")
+    expect(session.suggestion(settings, in: phrases)?.text, nil, "a second space ends it")
     // The run keeps only the words Suggest reads, however long the text goes without a break.
     session = Session()
     for _ in 0..<40 { word("ba") }
     word("lowx"); word("vaajn"); word("sa")
-    expect(session.suggestion(settings, in: phrases), "cơ", "after a long run")
+    expect(session.suggestion(settings, in: phrases)?.text, "cơ", "after a long run")
     let kept = Mirror(reflecting: session).children.first { $0.label == "phrase" }?.value as? [String]
     expect(kept?.count, Suggest.maxWords, "the run is capped")
     word("lowx"); word("vaajn"); word("sa")
     session.accepted()
-    expect(session.suggestion(settings, in: phrases), nil, "accepting starts a new run")
+    expect(session.suggestion(settings, in: phrases)?.text, nil, "accepting starts a new run")
 }
 
 func checkResourceUsage() {
@@ -912,8 +912,8 @@ func checkPersonalPhrases() {
 
     // Personal phrases come before the shared list.
     let shared = PhraseIndex(data: PhraseIndex.build(lines: ["công ty xyz kia"]))!
-    expect(Suggest.completion(after: ["công", "ty"], style: .modern, in: shared), "xyz kia", "the shared list alone")
-    expect(Suggest.completion(after: ["công", "ty"], style: .modern, in: shared, personal: phrases), "abc ltd", "personal first")
+    expect(Suggest.completion(after: ["công", "ty"], style: .modern, in: shared), Suggestion(text: "xyz kia", personal: false), "the shared list alone")
+    expect(Suggest.completion(after: ["công", "ty"], style: .modern, in: shared, personal: phrases), Suggestion(text: "abc ltd", personal: true), "personal first, and it says so")
 }
 
 func checkLanguageHabits() {
@@ -1234,6 +1234,8 @@ func checkStats() {
         "appVersion", "macOS", "toneStyle", "appRuleCount", "day", "installID",
         "wordChanged", "wordKept", "escRestoredRaw", "directFallback",
         "correctionToEnglish", "correctionToVietnamese", "flipToEnglish", "flipToVietnamese", "habitToEnglish", "habitToVietnamese",
+        "sharedSuggestionShown", "sharedSuggestionAccepted", "sharedSuggestionDismissed",
+        "personalSuggestionShown", "personalSuggestionAccepted", "personalSuggestionDismissed",
     ], "payload attributes are the allowlist")
     let strings = events[0].attributes.values.compactMap { value -> String? in
         if case .string(let text) = value { return text }
