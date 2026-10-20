@@ -2,7 +2,7 @@
 # Build and sign dist/Ankey.app after the engine tests pass.
 #   ./build.sh            build only
 #   ./build.sh --install  also install into ~/Library/Input Methods and restart the running Ankey
-# SIGN_IDENTITY=<hash or name> overrides the signing identity.
+# SIGN_IDENTITY=<hash or name> overrides the signing identity; TEAM_ID=<team> picks the team's Developer ID.
 # REQUIRE_DEVELOPER_ID=1 fails instead of falling back to an ad-hoc signature.
 set -eu
 
@@ -32,9 +32,10 @@ swiftc -swift-version 5 -strict-concurrency=complete -O -target arm64-apple-maco
     -o "$APP/Contents/MacOS/Ankey" \
     "$ROOT"/Core/*.swift "$ROOT"/App/*.swift
 
-# SIGN_IDENTITY picks the signing identity. Without it, the first Developer ID Application
-# identity in the keychain signs the app.
-SIGN_ID="${SIGN_IDENTITY:-$(security find-identity -v -p codesigning | awk '/Developer ID Application/ { print $2; exit }')}"
+# SIGN_IDENTITY picks the signing identity. Without it, the Developer ID Application identity of
+# TEAM_ID (environment or .env) signs the app; with no TEAM_ID, the first one in the keychain does.
+TEAM_ID="${TEAM_ID:-$(sed -n 's/^TEAM_ID=//p' .env 2>/dev/null | head -1)}"
+SIGN_ID="${SIGN_IDENTITY:-$(security find-identity -v -p codesigning | awk -v team="$TEAM_ID" '/Developer ID Application/ && (team == "" || index($0, "(" team ")")) { print $2; exit }')}"
 sign() {
     if [ -n "$SIGN_ID" ] && codesign --force --sign "$SIGN_ID" --options runtime --timestamp "$1"; then
         return
