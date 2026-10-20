@@ -6,7 +6,7 @@
 set -eu
 
 REPO="nguyenvanduocit/ankey"
-TEAM_ID="694MCRBCD6"
+TEAM_ID="53NJTFJB2R"
 BUNDLE_ID="dev.firegroup.inputmethod.Ankey"
 DEST="$HOME/Library/Input Methods/Ankey.app"
 
