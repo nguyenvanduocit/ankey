@@ -317,6 +317,10 @@ func checkSyllables() {
             }
         }
     }
+    // Spoken forms the dictionaries lack still type: a user reported `emr` and `erm` staying as typed.
+    for raw in ["emr", "erm"] {
+        expect(render(raw, .modern), "ẻm", "\(raw) types ẻm")
+    }
     print("syllables \(Syllables.all.count), \(english) key orders typed as English words")
 }
 

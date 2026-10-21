@@ -6,7 +6,7 @@ import Foundation
 ///
 /// Source: single syllables of Viet74K (github.com/duyetdev/vietnamese-wordlist) and
 /// hunspell-vi (github.com/1ec5/hunspell-vi), kept when the rule-based engine can type them,
-/// plus `ờm ừm ừa`. Both tone placements of oa, oe, uy are listed; lookup ignores the placement.
+/// plus the spoken forms `ờm ừm ừa ẻm`. Both tone placements of oa, oe, uy are listed; lookup ignores the placement.
 private let source = """
 a ai am an ang anh ao au ay b ba bai bam ban bang banh bao bau bay be bem ben beng beo bi bia bic
 bin binh biên biêng biêt biêu biếc biếm biến biếng biết biếu biền biều biển biểu biện biệt bo boa
@@ -352,7 +352,7 @@ y yen yêm yên yêng yêu yếm yến yết yếu yểm yểng yểu à ành à
 đỗi độ độc đội độn động độp đột đớ đới đớn đớp đớt đờ đời đờm đờn đởm đởn đỡ đợ đợi đợp đợt đụ đục
 đụi đụn đụng đụp đụt đủ đủi đủng đứ đứa đức đứng đứt đừ đừa đừng đử đực đựng ĩ ĩnh ơ ơi ơn ư ưa ưng
 ưu ươi ươm ươn ương ước ướm ướp ướt ườn ưỡn ạ ạch ạnh ạo ạt ả ải ảm ảng ảnh ảo ấm ấn ấp ất ấu ấy ầm
-ầng ầu ầy ẩm ẩn ẩng ẩu ẩy ẫm ậc ậm ập ậu ắc ắng ắp ắt ằng ẳng ẵm ặc ặp ẹ ẹc ẹo ẹp ẹt ẻn ẻo ẽo ế ếch
+ầng ầu ầy ẩm ẩn ẩng ẩu ẩy ẫm ậc ậm ập ậu ắc ắng ắp ắt ằng ẳng ẵm ặc ặp ẹ ẹc ẹo ẹp ẹt ẻm ẻn ẻo ẽo ế ếch
 ếm ếp ề ềnh ễng ễnh ệ ệch ện ệnh ệp ệt ỉ ỉa ỉm ỉn ỉu ị ịch ịn ịt ọ ọc ọe ọi ọp ọt ỏe ỏi ỏm ỏn ỏng ố
 ốc ối ốm ống ốp ốt ồ ồi ồm ồn ồng ổ ổi ổm ổn ổng ộ ộc ộn ộp ớ ới ớm ớn ớt ờ ời ờm ờn ở ởn ỡm ợ ợi ợt
 ụ ụa ục ụp ụt ủ ủa ủi ủn ủng ủy ứ ứa ức ứng ừ ừa ừm ừng ử ửng ựa ực ỳ ỷ
