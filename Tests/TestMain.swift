@@ -1596,6 +1596,7 @@ struct TestRunner {
         checkSettingsSave()
         checkAIConfig()
         checkChangeLog()
+        checkDiary()
         checkAppRules()
         checkStats()
         checkStatsUpload()

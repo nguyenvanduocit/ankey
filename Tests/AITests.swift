@@ -202,3 +202,66 @@ func checkChangeLog() {
     let loaded = data.flatMap { try? JSONDecoder().decode(ChangeLog.self, from: $0) }
     expect(loaded, saved, "the log survives encode and decode")
 }
+
+// MARK: Diary
+
+private func day(_ number: Int) -> String {
+    String(format: "2026-%02d-%02d", 1 + (number - 1) / 28, 1 + (number - 1) % 28)
+}
+
+func checkDiary() {
+    var diary = Diary()
+    diary.record(.escRestoredRaw, raw: "vieetj", shown: "vi\u{1ec7}t", app: "com.apple.Terminal", on: "2026-10-27")
+    diary.record(.flipToEnglish, raw: "as", shown: "\u{00e1}", app: "", on: "2026-10-27")
+    expect(diary.entries.count, 2, "two events are two entries")
+    expect(diary.entries[0], DiaryEntry(day: "2026-10-27", app: "com.apple.Terminal", kind: .escRestoredRaw, raw: "vieetj", shown: "vi\u{1ec7}t"), "an entry keeps what happened")
+    expect(diary.entries[1].app, "unknown", "an app with no bundle ID is unknown")
+    diary.record(.correctionToEnglish, raw: String(repeating: "x", count: 100), shown: "y", app: "a", on: "2026-10-27")
+    expect(diary.entries[2].raw.count, Diary.maxWordLength, "a long word is cut")
+
+    // The entry count is bounded and the oldest go first.
+    var long = Diary()
+    for index in 0..<(Diary.maxEntries + 10) { long.record(.escRestoredRaw, raw: "w\(index)", shown: "s", app: "a", on: "2026-10-27") }
+    expect(long.entries.count, Diary.maxEntries, "the diary keeps its capacity")
+    expect(long.entries.first?.raw, "w10", "the oldest entries drop first")
+    expect(long.entries.last?.raw, "w\(Diary.maxEntries + 9)", "the newest entry stays")
+
+    // Only the last 30 days with anything in them are kept, in entries and in word counts alike.
+    var days = Diary()
+    for number in 1...(Diary.keepDays + 5) {
+        days.record(.flipToVietnamese, raw: "r", shown: "s", app: "a", on: day(number))
+        days.countWord(app: "a", on: day(number))
+    }
+    expect(Set(days.entries.map(\.day)).count, Diary.keepDays, "entries keep 30 days")
+    expect(days.words.count, Diary.keepDays, "word counts keep 30 days")
+    expect(days.entries.first?.day, day(6), "the oldest days drop first")
+    expect(days.words[day(1)] == nil, true, "a dropped day has no word counts")
+
+    // Words committed, per app per day: the denominator for how often an app misfires.
+    var counts = Diary()
+    counts.countWord(app: "com.a", on: "2026-10-27")
+    counts.countWord(app: "com.a", on: "2026-10-27")
+    counts.countWord(app: "com.b", on: "2026-10-27")
+    counts.countWord(app: "", on: "2026-10-28")
+    expect(counts.words["2026-10-27"], ["com.a": 2, "com.b": 1], "words are counted per app")
+    expect(counts.words["2026-10-28"], ["unknown": 1], "an unknown app is counted as unknown")
+
+    let data = try? JSONEncoder().encode(diary)
+    expect(data.flatMap { try? JSONDecoder().decode(Diary.self, from: $0) }, diary, "the diary survives encode and decode")
+
+    diary.forgetAll()
+    expect(diary, Diary(), "forgetting empties the diary")
+
+    // Nothing the diary holds reaches the statistics that go to Datadog.
+    var secret = Diary()
+    secret.record(.escRestoredRaw, raw: "secretkeys", shown: "secretshown", app: "com.secret.app", on: "2026-10-27")
+    secret.countWord(app: "com.secret.app", on: "2026-10-27")
+    var log = StatsLog()
+    log.record(.wordChanged, on: "2026-10-27")
+    let payload = StatsPayload(appVersion: "1", macOS: "26", settings: Settings(keepsDiary: true), log: log)
+    let body = String(data: LogIntake.body(payload.events(installID: "id")), encoding: .utf8) ?? ""
+    for text in ["secretkeys", "secretshown", "com.secret.app"] {
+        expect(body.contains(text), false, "the statistics payload does not carry \(text)")
+    }
+    expect(body.contains("keepsDiary"), false, "the statistics payload does not carry the diary switch")
+}
