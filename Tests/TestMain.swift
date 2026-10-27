@@ -1594,6 +1594,8 @@ struct TestRunner {
         for (raw, want) in telex { check(raw, want) }
         checkSettings()
         checkSettingsSave()
+        checkAIConfig()
+        checkChangeLog()
         checkAppRules()
         checkStats()
         checkStatsUpload()
