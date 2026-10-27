@@ -1,5 +1,6 @@
 dist/
 .build/
+build
 .remember/
 .superpowers/
 .DS_Store
