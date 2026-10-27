@@ -28,6 +28,7 @@ if opensGuide {
 }
 Updater.shared.startScheduledChecks()
 StatsSchedule.start()
+MainActor.assumeIsolated { AIReceiver.shared.start() }
 _ = NSApplicationMain(CommandLine.argc, CommandLine.unsafeArgv)
 
 private func enableAnkey() {

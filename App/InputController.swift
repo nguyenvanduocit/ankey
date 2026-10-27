@@ -153,8 +153,10 @@ final class AnkeyInputController: IMKInputController {
                 commit(sender, ctx)
                 return false
             }
-            if session.display(ctx.settings) != session.raw {
+            let shown = session.display(ctx.settings)
+            if shown != session.raw {
                 StatsStore.record(.escRestoredRaw)
+                DiaryStore.shared.record(.escRestoredRaw, raw: session.raw, shown: shown, app: ctx.rule.bundleID)
                 let raw = session.finishRaw()
                 noteHabit(ctx)
                 finalize(raw, sender, ctx)
@@ -178,9 +180,15 @@ final class AnkeyInputController: IMKInputController {
     /// word that stayed as typed, the typed keys for a converted one. Keys with one reading change nothing.
     private func swapWord(_ sender: Any!) -> Bool {
         let ctx = context(sender)
+        let raw = session.raw
+        let shown = session.display(ctx.settings)
         switch session.swap(ctx.settings) {
-        case .vietnamese: StatsStore.record(.flipToVietnamese)
-        case .english: StatsStore.record(.flipToEnglish)
+        case .vietnamese:
+            StatsStore.record(.flipToVietnamese)
+            DiaryStore.shared.record(.flipToVietnamese, raw: raw, shown: shown, app: ctx.rule.bundleID)
+        case .english:
+            StatsStore.record(.flipToEnglish)
+            DiaryStore.shared.record(.flipToEnglish, raw: raw, shown: shown, app: ctx.rule.bundleID)
         case nil: break
         }
         refresh(sender, ctx)
@@ -200,6 +208,7 @@ final class AnkeyInputController: IMKInputController {
     override func deactivateServer(_ sender: Any!) {
         PersonalPhrasesStore.shared.flush()
         LanguageHabitsStore.shared.flush()
+        DiaryStore.shared.flush()
         hideSuggestion(sender)
         endCapture()
         commit(sender, context(sender))
@@ -298,9 +307,14 @@ final class AnkeyInputController: IMKInputController {
         let word = session.finish(ctx.settings)
         if let correction = session.learned {
             AdjustStore.shared.set(correction.word, to: correction.adjust)
-            StatsStore.record(correction.adjust > 0 ? .correctionToEnglish : .correctionToVietnamese)
+            let toEnglish = correction.adjust > 0
+            StatsStore.record(toEnglish ? .correctionToEnglish : .correctionToVietnamese)
+            DiaryStore.shared.record(toEnglish ? .correctionToEnglish : .correctionToVietnamese, raw: raw, shown: word, app: ctx.rule.bundleID)
         }
-        if let event = statsEvent(raw: raw, committed: word) { StatsStore.record(event) }
+        if let event = statsEvent(raw: raw, committed: word) {
+            StatsStore.record(event)
+            DiaryStore.shared.countWord(app: ctx.rule.bundleID)
+        }
         learn(from: session.transition, ctx)
         noteHabit(ctx)
         if key == " ", !word.isEmpty, ctx.settings.suggestions, ctx.rule.insertion == .marked,
