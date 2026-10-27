@@ -265,3 +265,155 @@ func checkDiary() {
     }
     expect(body.contains("keepsDiary"), false, "the statistics payload does not carry the diary switch")
 }
+
+// MARK: Command line and gateway
+
+private func canonical(_ object: Any) -> String {
+    (try? JSONSerialization.data(withJSONObject: object, options: [.sortedKeys])).flatMap { String(data: $0, encoding: .utf8) } ?? "<not json>"
+}
+
+func checkAICommand() {
+    func setting(_ kind: ConfigEdit.Kind, _ key: String, _ value: String? = nil, dryRun: Bool = false) -> AICommand {
+        .edit(ConfigEdit(kind: kind, key: key, value: value), dryRun: dryRun)
+    }
+    let cases: [([String], AICommand)] = [
+        (["guide"], .guide),
+        (["skill"], .skill),
+        (["help"], .help),
+        (["--help"], .help),
+        (["-h"], .help),
+        (["show"], .show(.all, limit: 200)),
+        (["show", "learned"], .show(.learned, limit: 200)),
+        (["show", "settings"], .show(.settings, limit: 200)),
+        (["show", "stats"], .show(.stats, limit: 200)),
+        (["show", "changes"], .show(.changes, limit: 200)),
+        (["show", "diary", "--limit", "5"], .show(.diary, limit: 5)),
+        (["show", "--limit", "5", "diary"], .show(.diary, limit: 5)),
+        (["show", "--limit", "99999"], .show(.all, limit: 2000)),
+        (["show", "--limit", "0"], .show(.all, limit: 1)),
+        (["set", "toneStyle", "classic"], setting(.set, "toneStyle", "classic")),
+        (["set", "escClears", "off", "--dry-run"], setting(.set, "escClears", "off", dryRun: true)),
+        (["shorthand", "add", "kg"], setting(.shorthandAdd, "kg")),
+        (["shorthand", "remove", "kg", "--dry-run"], setting(.shorthandRemove, "kg", dryRun: true)),
+        (["app", "set", "com.x", "direct"], setting(.appRule, "com.x", "direct")),
+        (["app", "remove", "com.x"], setting(.appRuleRemove, "com.x")),
+        (["learned", "adjust", "COS", "-2"], .gateway(.adjust(word: "cos", score: -2))),
+        (["learned", "adjust", "cos", "0"], .gateway(.adjust(word: "cos", score: 0))),
+        (["learned", "forget-phrase", "xin ch\u{00e0}o", "b\u{1ea1}n"], .gateway(.forgetPhrase(prefix: "xin ch\u{00e0}o", word: "b\u{1ea1}n"))),
+        (["learned", "forget-habit", "d\u{00f9}ng"], .gateway(.forgetHabit(word: "d\u{00f9}ng"))),
+        (["diary", "clear"], .gateway(.diaryClear)),
+        (["undo"], .undo),
+    ]
+    for (args, want) in cases {
+        expect(AICommand.parse(args), .success(want), "parse \(args)")
+    }
+
+    let wrong: [[String]] = [
+        [], ["frobnicate"], ["set"], ["set", "toneStyle"], ["set", "a", "b", "c"], ["set", "a", "b", "--frob"],
+        ["show", "bogus"], ["show", "--limit"], ["show", "--limit", "x"], ["show", "learned", "diary"],
+        ["shorthand"], ["shorthand", "add"], ["shorthand", "toggle", "kg"],
+        ["app"], ["app", "set", "com.x"], ["app", "remove"], ["app", "frob", "com.x"],
+        ["learned"], ["learned", "adjust", "cos"], ["learned", "adjust", "cos", "3"], ["learned", "adjust", "cos", "two"],
+        ["learned", "forget-phrase", "only"], ["learned", "forget-habit"],
+        ["diary"], ["diary", "wipe"], ["undo", "now"], ["guide", "--dry-run"], ["learned", "adjust", "cos", "1", "--dry-run"],
+    ]
+    for args in wrong {
+        switch AICommand.parse(args) {
+        case .failure(.usage): break
+        default:
+            failed += 1
+            fputs("FAIL parse \(args) is a usage error\n", stderr)
+        }
+    }
+    expect(AICommand.parse(["set"]) == .failure(.usage("Usage: Ankey set <key> <value> [--dry-run]")), true, "a usage error says how to call it")
+
+    for verb in ["guide", "skill", "help", "show", "set", "shorthand", "app", "learned", "diary", "undo"] {
+        expect(AICommand.isVerb(verb), true, "\(verb) is a verb")
+    }
+    for other in ["enable", "-psn_0_12345", "", "--help-me"] { expect(AICommand.isVerb(other), false, "\(other) starts the input method") }
+    expect(AICommand.isVerb(nil), false, "no argument starts the input method")
+}
+
+func checkGateway() {
+    let requests: [GatewayRequest] = [
+        .adjust(word: "cos", score: -2), .adjust(word: "x", score: 0), .forgetPhrase(prefix: "xin ch\u{00e0}o", word: "b\u{1ea1}n"),
+        .forgetHabit(word: "d\u{00f9}ng"), .diaryClear, .snapshot(limit: 50),
+    ]
+    for request in requests {
+        let message = GatewayMessage(id: "abc", request: request)
+        expect(GatewayMessage(userInfo: message.userInfo), message, "a message survives its userInfo: \(request)")
+    }
+    expect(GatewayMessage(userInfo: ["id": "x"]) == nil, true, "a message needs a name")
+    expect(GatewayMessage(userInfo: ["name": "diaryClear"]) == nil, true, "a message needs an id")
+    expect(GatewayMessage(userInfo: ["id": "x", "name": "explode"]) == nil, true, "an unknown name is not a message")
+    expect(GatewayMessage(userInfo: ["id": "x", "name": "adjust", "word": "cos"]) == nil, true, "adjust needs a score")
+    expect(GatewayMessage(userInfo: ["id": "x", "name": "adjust", "word": "cos", "score": "9"]) == nil, true, "a score out of range is not a message")
+    expect(GatewayMessage(userInfo: ["id": "x", "name": "snapshot", "limit": "0"]) == nil, true, "a limit below 1 is not a message")
+    expect(GatewayMessage(userInfo: ["id": "x", "name": "forgetPhrase", "prefix": "a"]) == nil, true, "forgetPhrase needs a word")
+
+    for reply in [GatewayReply(id: "abc", ok: true, message: "done", json: nil), GatewayReply(id: "abc", ok: false, message: "no", json: "{}")] {
+        expect(GatewayReply(userInfo: reply.userInfo), reply, "a reply survives its userInfo")
+    }
+    expect(GatewayReply(userInfo: ["id": "x", "message": "m"]) == nil, true, "a reply needs ok")
+    expect(GatewayReply(userInfo: ["id": "x", "ok": "maybe", "message": "m"]) == nil, true, "ok is true or false")
+    expect(Gateway.requestName != Gateway.replyName, true, "requests and replies travel on different names")
+}
+
+func checkAIReport() {
+    let settings = AIReport.settings(Settings(toneStyle: .classic, shorthand: ["kg"], appRules: [AppRule(bundleID: "com.x", enabled: false)]))
+    expect(Set(settings.keys), [
+        "toneStyle", "restoreRaw", "abbreviation", "escClears", "suggestions", "learnsPhrases", "learnsLanguage", "keepsDiary",
+        "collectStats", "shareStats", "onboardingSeen", "shorthand", "appRules",
+    ], "the settings report lists every saved setting and nothing learned")
+    expect(settings["toneStyle"] as? String, "classic", "the tone style is a name")
+    expect(settings["keepsDiary"] as? Bool, false, "a switch is a bool")
+    expect(settings["shorthand"] as? [String], ["kg"], "the shorthand list")
+    expect(canonical(settings["appRules"] as Any), #"[{"bundleID":"com.x","mode":"off"}]"#, "an app rule is its mode")
+
+    let learned = AIReport.learned(
+        adjust: ["cos": -2, "chair": 2],
+        phrases: [(prefix: "xin ch\u{00e0}o", word: "b\u{1ea1}n", count: 7)],
+        habits: [(word: "d\u{00f9}ng", language: .english, samples: 12)],
+        source: "live")
+    expect(canonical(learned),
+           #"{"habits":[{"language":"english","samples":12,"word":"d\#u{00f9}ng"}],"phrases":[{"count":7,"prefix":"xin ch\#u{00e0}o","word":"b\#u{1ea1}n"}],"source":"live","words":[{"score":2,"word":"chair"},{"score":-2,"word":"cos"}]}"#,
+           "the learned report")
+
+    var log = StatsLog()
+    log.record(.wordKept, on: "2026-10-27")
+    log.record(.wordChanged, on: "2026-10-26")
+    log.record(.wordChanged, on: "2026-10-26")
+    let stats = AIReport.stats(log)
+    let days = stats["days"] as? [[String: Any]]
+    expect(days?.map { $0["day"] as? String ?? "" }, ["2026-10-26", "2026-10-27"], "stats days run oldest first")
+    let counts = days?.first?["counts"] as? [String: Int]
+    expect(counts?["wordChanged"], 2, "a day carries its counts")
+    expect(counts?["wordKept"], 0, "an event that did not happen is zero")
+    expect(counts?.count, StatsEvent.allCases.count, "every event is listed")
+    expect(stats["keepDays"] as? Int, StatsLog.keepDays, "the report says how long the Mac keeps days")
+    expect(canonical(stats).lowercased().contains("install"), false, "the install id is not in the report")
+
+    expect(canonical(AIReport.diary(nil, limit: 10)), #"{"enabled":false}"#, "no diary reads as off")
+    var diary = Diary()
+    diary.record(.escRestoredRaw, raw: "a1", shown: "x", app: "com.t", on: "2026-10-26")
+    diary.record(.escRestoredRaw, raw: "a2", shown: "y", app: "com.t", on: "2026-10-27")
+    diary.record(.flipToEnglish, raw: "a3", shown: "z", app: "com.m", on: "2026-10-27")
+    for _ in 0..<10 { diary.countWord(app: "com.t", on: "2026-10-26") }
+    for _ in 0..<5 { diary.countWord(app: "com.m", on: "2026-10-27") }
+    diary.countWord(app: "com.q", on: "2026-10-27")
+    let report = AIReport.diary(diary, limit: 2)
+    expect(report["enabled"] as? Bool, true, "a diary reads as on")
+    expect(report["entryCount"] as? Int, 3, "the report counts every entry")
+    let entries = report["entries"] as? [[String: Any]]
+    expect(entries?.map { $0["raw"] as? String ?? "" }, ["a3", "a2"], "entries run newest first, up to the limit")
+    expect(canonical(report["apps"] as Any),
+           #"[{"app":"com.t","byKind":{"escRestoredRaw":2},"events":2,"words":10},{"app":"com.m","byKind":{"flipToEnglish":1},"events":1,"words":5},{"app":"com.q","byKind":{},"events":0,"words":1}]"#,
+           "each app with its words, events and the kinds of event")
+
+    var changes = ChangeLog()
+    changes.record(Change(time: Date(timeIntervalSince1970: 0), summary: "first", undo: ConfigEdit(kind: .set, key: "escClears", value: "on")))
+    changes.record(Change(time: Date(timeIntervalSince1970: 60), summary: "second", undo: nil))
+    expect(canonical(AIReport.changes(changes)),
+           #"{"changes":[{"summary":"second","time":"1970-01-01T00:01:00Z","undoable":false},{"summary":"first","time":"1970-01-01T00:00:00Z","undoable":true}]}"#,
+           "changes run newest first")
+}
