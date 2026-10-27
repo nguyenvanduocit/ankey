@@ -417,3 +417,40 @@ func checkAIReport() {
            #"{"changes":[{"summary":"second","time":"1970-01-01T00:01:00Z","undoable":false},{"summary":"first","time":"1970-01-01T00:00:00Z","undoable":true}]}"#,
            "changes run newest first")
 }
+
+// MARK: Follow-ups, snapshot and the guide
+
+func checkAIFollowUps() {
+    let now = Date(timeIntervalSince1970: 1_800_000_000)
+    // The Statistics tab turns sharing off together with collection, so the command line does too.
+    do {
+        let both = Settings(collectStats: true, shareStats: true)
+        let result = try ConfigEdit(kind: .set, key: "collectStats", value: "off").applying(to: both, now: now)
+        expect(result.settings.collectStats, false, "collection goes off")
+        expect(result.settings.shareStats, false, "sharing goes off with collection")
+        let sharing = try ConfigEdit(kind: .set, key: "shareStats", value: "off").applying(to: both, now: now)
+        expect(sharing.settings.collectStats, true, "sharing off leaves collection on")
+    } catch { failed += 1; fputs("FAIL follow-ups: \(error)\n", stderr) }
+
+    let snapshot = AIReport.snapshot(adjust: [:], phrases: [], habits: [], diary: nil, limit: 5, source: "files")
+    expect(Set(snapshot.keys), ["learned", "diary"], "a snapshot holds what only the running app keeps")
+    expect((snapshot["learned"] as? [String: Any])?["source"] as? String, "files", "a snapshot says where it came from")
+    expect(canonical(snapshot["diary"] as Any), #"{"enabled":false}"#, "a snapshot with no diary reads as off")
+}
+
+/// The guide is what an AI reads to use the command line, so it must name every command, setting and counter.
+func checkAIGuide() {
+    guard let data = FileManager.default.contents(atPath: "Resources/ai-guide.md"), let guide = String(data: data, encoding: .utf8) else {
+        failed += 1
+        fputs("FAIL Resources/ai-guide.md is not readable from \(FileManager.default.currentDirectoryPath)\n", stderr)
+        return
+    }
+    let commands = [
+        "show", "set", "shorthand add", "shorthand remove", "app set", "app remove", "learned adjust",
+        "learned forget-phrase", "learned forget-habit", "diary clear", "undo",
+    ]
+    for command in commands { expect(guide.contains("ankey \(command)"), true, "the guide explains `ankey \(command)`") }
+    for key in SettingKey.allCases { expect(guide.contains(key.rawValue), true, "the guide names the setting \(key.rawValue)") }
+    for event in StatsEvent.allCases { expect(guide.contains(event.rawValue), true, "the guide explains the counter \(event.rawValue)") }
+    for kind in DiaryKind.allCases { expect(guide.contains(kind.rawValue), true, "the guide explains the diary kind \(kind.rawValue)") }
+}

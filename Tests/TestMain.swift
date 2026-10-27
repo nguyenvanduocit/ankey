@@ -1600,6 +1600,8 @@ struct TestRunner {
         checkAICommand()
         checkGateway()
         checkAIReport()
+        checkAIFollowUps()
+        checkAIGuide()
         checkAppRules()
         checkStats()
         checkStatsUpload()

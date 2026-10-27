@@ -39,6 +39,22 @@ enum AIReport {
         ]
     }
 
+    /// What only the running app holds in memory, in one answer: the learned data and the diary. The command line
+    /// asks the app for it, and builds the same answer from the files when the app is not running.
+    static func snapshot(
+        adjust: [String: Int],
+        phrases: [(prefix: String, word: String, count: Int)],
+        habits: [(word: String, language: Language, samples: Int)],
+        diary: Diary?,
+        limit: Int,
+        source: String
+    ) -> [String: Any] {
+        [
+            "learned": learned(adjust: adjust, phrases: phrases, habits: habits, source: source),
+            "diary": AIReport.diary(diary, limit: limit),
+        ]
+    }
+
     /// The counters, oldest day first, with every event listed. No install ID: it is not data about typing.
     static func stats(_ log: StatsLog) -> [String: Any] {
         [

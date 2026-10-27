@@ -164,6 +164,8 @@ extension ConfigEdit {
         guard before != wanted else { return (settings, nil) }
         var next = settings
         setting.assign(wanted, in: &next)
+        // Sharing needs collection, and the Statistics tab turns it off together with collection.
+        if setting == .collectStats, wanted == "off" { next.shareStats = false }
         // Turning a privacy switch back on is not something an undo may do.
         let undo = setting.humanOnly ? nil : ConfigEdit(kind: .set, key: key, value: before)
         return (next, Change(time: now, summary: "\(key): \(before) \u{2192} \(wanted)", undo: undo))
