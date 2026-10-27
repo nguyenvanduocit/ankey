@@ -55,10 +55,12 @@ final class AIReceiver: NSObject {
             DiaryStore.shared.forgetAll()
             return reply(true, "The diary is empty.")
         case .snapshot(let limit):
-            let report = AIReport.learned(
+            let report = AIReport.snapshot(
                 adjust: AdjustStore.shared.words,
                 phrases: PersonalPhrasesStore.shared.learned(limit: limit),
                 habits: LanguageHabitsStore.shared.learned(limit: limit),
+                diary: DiaryStore.shared.snapshot(),
+                limit: limit,
                 source: "live")
             return reply(true, "ok", json: AIJSON.text(report))
         }

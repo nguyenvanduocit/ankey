@@ -6,6 +6,10 @@ private let connectionName = "Ankey_Connection"
 
 var ankeyServer: IMKServer!
 
+if let status = AICLI.run(Array(CommandLine.arguments.dropFirst())) {
+    exit(status)
+}
+
 if CommandLine.arguments.dropFirst().contains("enable") {
     enableAnkey()
     exit(0)

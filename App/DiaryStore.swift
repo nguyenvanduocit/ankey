@@ -4,7 +4,8 @@ import Foundation
 /// words the user typed and the apps they typed them in, so only the user can read the file and it never leaves
 /// this Mac. While the user has it switched off every call does nothing and nothing of it is kept.
 final class DiaryStore: @unchecked Sendable {
-    static let shared = DiaryStore(file: AIFiles.supportDirectory.appendingPathComponent("diary.json"))
+    static let defaultFile = AIFiles.supportDirectory.appendingPathComponent("diary.json")
+    static let shared = DiaryStore(file: defaultFile)
 
     private static let saveEvery = 300
     private static let saveAfter: TimeInterval = 300
@@ -27,6 +28,13 @@ final class DiaryStore: @unchecked Sendable {
         diary = stored ?? Diary()
         mayHoldData = stored != nil
         dropIfOff()
+    }
+
+    /// The diary file as it is, for a process that is not the input method. Nil while the switch is off. Reading
+    /// changes nothing.
+    static func stored(defaults: UserDefaults = .standard) -> Diary? {
+        guard Settings.keepsDiary(in: defaults) else { return nil }
+        return (try? Data(contentsOf: defaultFile)).flatMap { try? JSONDecoder().decode(Diary.self, from: $0) } ?? Diary()
     }
 
     func record(_ kind: DiaryKind, raw: String, shown: String, app: String) {
