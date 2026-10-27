@@ -83,6 +83,10 @@ struct Settings: Equatable {
     /// Learns which language the user writes after which word, and reads it when a word could be either. Off
     /// until the user turns it on, because it keeps words the user typed (on this Mac only).
     var learnsLanguage = false
+    /// Keeps a diary of the words the user took back (Esc, Shift+Esc, erase and retype) with the app they were
+    /// typed in, for the user's AI to read. Off until the user turns it on, because it keeps words the user
+    /// typed (on this Mac only, never sent).
+    var keepsDiary = false
     var shorthand = ["\u{0111}c"]
     /// What Ankey learned from corrections: a score per word, added to its built-in band. Typed keys,
     /// lowercase. `Settings.load` fills it from the `AdjustStore`, and `save` never writes it.
@@ -108,6 +112,7 @@ extension Settings {
         static let suggestions = "suggestions"
         static let learnsPhrases = "learnsPhrases"
         static let learnsLanguage = "learnsLanguage"
+        static let keepsDiary = "keepsDiary"
         static let shorthand = "shorthand"
         static let appRules = "appRules"
         static let excludedApps = "excludedApps"
@@ -124,6 +129,11 @@ extension Settings {
     /// One bool read, so the key path can ask before it counts anything.
     static func collectsStats(in defaults: UserDefaults = .standard) -> Bool {
         defaults.bool(forKey: Key.collectStats)
+    }
+
+    /// One bool read, so the key path can ask before it writes a word down.
+    static func keepsDiary(in defaults: UserDefaults = .standard) -> Bool {
+        defaults.bool(forKey: Key.keepsDiary)
     }
 
     /// The rule for an app. An unknown client, or one without a bundle ID, gets the default rule.
@@ -144,6 +154,7 @@ extension Settings {
         settings.suggestions = defaults.object(forKey: Key.suggestions) as? Bool ?? settings.suggestions
         settings.learnsPhrases = defaults.object(forKey: Key.learnsPhrases) as? Bool ?? settings.learnsPhrases
         settings.learnsLanguage = defaults.object(forKey: Key.learnsLanguage) as? Bool ?? settings.learnsLanguage
+        settings.keepsDiary = keepsDiary(in: defaults)
         settings.collectStats = collectsStats(in: defaults)
         settings.shareStats = settings.collectStats && defaults.bool(forKey: Key.shareStats)
         settings.onboardingSeen = defaults.bool(forKey: Key.onboardingSeen)
@@ -159,19 +170,27 @@ extension Settings {
         return settings
     }
 
-    func save(to defaults: UserDefaults = .standard) {
-        defaults.set(toneStyle.rawValue, forKey: Key.toneStyle)
-        defaults.set(restoreRaw, forKey: Key.restoreRaw)
-        defaults.set(abbreviation, forKey: Key.abbreviation)
-        defaults.set(escClears, forKey: Key.escClears)
-        defaults.set(suggestions, forKey: Key.suggestions)
-        defaults.set(learnsPhrases, forKey: Key.learnsPhrases)
-        defaults.set(learnsLanguage, forKey: Key.learnsLanguage)
-        defaults.set(collectStats, forKey: Key.collectStats)
-        defaults.set(shareStats, forKey: Key.shareStats)
-        defaults.set(onboardingSeen, forKey: Key.onboardingSeen)
-        defaults.set(shorthand, forKey: Key.shorthand)
-        defaults.set(appRules.map(\.stored), forKey: Key.appRules)
+    /// With `old`, writes only the keys that differ from it. A window holds a copy from when it was built, and
+    /// writing every key from that copy would take back a change another process made to a key the window did
+    /// not touch.
+    func save(to defaults: UserDefaults = .standard, replacing old: Settings? = nil) {
+        func put<Value: Equatable>(_ path: KeyPath<Settings, Value>, _ key: String, as stored: (Value) -> Any = { $0 }) {
+            if let old, old[keyPath: path] == self[keyPath: path] { return }
+            defaults.set(stored(self[keyPath: path]), forKey: key)
+        }
+        put(\.toneStyle, Key.toneStyle) { $0.rawValue }
+        put(\.restoreRaw, Key.restoreRaw)
+        put(\.abbreviation, Key.abbreviation)
+        put(\.escClears, Key.escClears)
+        put(\.suggestions, Key.suggestions)
+        put(\.learnsPhrases, Key.learnsPhrases)
+        put(\.learnsLanguage, Key.learnsLanguage)
+        put(\.keepsDiary, Key.keepsDiary)
+        put(\.collectStats, Key.collectStats)
+        put(\.shareStats, Key.shareStats)
+        put(\.onboardingSeen, Key.onboardingSeen)
+        put(\.shorthand, Key.shorthand)
+        put(\.appRules, Key.appRules) { $0.map(\.stored) }
         defaults.removeObject(forKey: Key.excludedApps)
     }
 

@@ -1593,6 +1593,7 @@ struct TestRunner {
     static func main() {
         for (raw, want) in telex { check(raw, want) }
         checkSettings()
+        checkSettingsSave()
         checkAppRules()
         checkStats()
         checkStatsUpload()

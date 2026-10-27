@@ -1,10 +1,11 @@
 import Cocoa
 import SwiftUI
 
-/// Every change writes straight to UserDefaults. The input controller reads it on the next key.
+/// Every change writes straight to UserDefaults. The input controller reads it on the next key. Only the keys
+/// that changed are written, so a window left open does not take back what the command line changed.
 final class SettingsModel: ObservableObject {
     @Published var value = Settings.load() {
-        didSet { value.save() }
+        didSet { value.save(replacing: oldValue) }
     }
 }
 
