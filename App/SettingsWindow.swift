@@ -40,9 +40,10 @@ struct SettingsView: View {
             HStack(spacing: 2 * Pixel.unit) {
                 ForEach(SettingsTab.allCases, id: \.self) { item in
                     Button { model.tab = item } label: {
-                        Text(item.title).frame(maxWidth: .infinity)
+                        Text(item.title).lineLimit(1).minimumScaleFactor(0.85).frame(maxWidth: .infinity)
                     }
-                    .buttonStyle(PixelButtonStyle(primary: model.tab == item))
+                    // Six tabs share the width, so a tab is only as wide as its title needs.
+                    .buttonStyle(PixelButtonStyle(primary: model.tab == item, minWidth: 0))
                 }
             }
             .padding(.horizontal, 8 * Pixel.unit)
