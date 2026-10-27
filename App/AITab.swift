@@ -82,11 +82,12 @@ struct AITab: View {
 
     /// Takes the newest change that can be undone, with the same rules as `Ankey undo`.
     private func undo() {
-        var log = AIFiles.readChangeLog()
-        guard let popped = log.popUndo(),
-              let result = try? popped.edit.applying(to: model.value),
-              (try? AIFiles.writeChangeLog(log)) != nil else { return }
-        model.value = result.settings
+        let settings = model.value
+        guard let next = try? AIFiles.updateChangeLog({ (log: inout ChangeLog) throws -> Settings in
+            guard let popped = log.popUndo() else { throw AIError.failed("Nothing to undo.") }
+            return try popped.edit.applying(to: settings).settings
+        }) else { return }
+        model.value = next
         refresh()
     }
 

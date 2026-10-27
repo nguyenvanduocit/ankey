@@ -84,7 +84,8 @@ Every command prints JSON. A failure exits with status 1 and prints `{"ok": fals
 `set`, `shorthand` and `app` accept `--dry-run`, which prints the change and writes nothing. An edit that changes
 nothing says so. `learned` and `diary clear` need Ankey running: the command waits two seconds for the answer and
 fails if there is none. `learned adjust` only accepts words Ankey already knows as English. Forgotten phrases and
-habits cannot be undone; `ankey undo` covers settings, shorthand and app rules.
+habits cannot be undone. `ankey undo` covers settings, shorthand and app rules; a privacy switch you turned off
+has no undo, because only the user switches one back on.
 
 ## How to help
 

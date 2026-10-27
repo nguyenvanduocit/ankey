@@ -155,7 +155,7 @@ enum Gateway {
     static let replyName = "dev.firegroup.inputmethod.Ankey.ai.reply"
 }
 
-/// A request and the ID its reply carries back. `userInfo` holds only strings, which every process can read.
+/// A request and the UUID its reply carries back. `userInfo` holds only strings, which every process can read.
 struct GatewayMessage: Equatable {
     var id: String
     var request: GatewayRequest
@@ -187,7 +187,8 @@ struct GatewayMessage: Equatable {
 extension GatewayMessage {
     /// Nil for anything that is not a well-formed request, so the app ignores what it does not understand.
     init?(userInfo info: [String: String]) {
-        guard let id = info["id"], let name = info["name"] else { return nil }
+        // The ID names the snapshot file the app writes, and any process can post a request: only a UUID is safe.
+        guard let id = info["id"], UUID(uuidString: id) != nil, let name = info["name"] else { return nil }
         let request: GatewayRequest
         switch name {
         case "adjust":
@@ -211,17 +212,15 @@ extension GatewayMessage {
     }
 }
 
-/// The app's answer to one request. `json` carries data for a snapshot.
+/// The app's answer to one request: whether it worked, in a sentence. It never carries typed words, because every
+/// process of the login session can read a distributed notification. What a snapshot holds goes in a file.
 struct GatewayReply: Equatable {
     var id: String
     var ok: Bool
     var message: String
-    var json: String?
 
     var userInfo: [String: String] {
-        var info = ["id": id, "ok": ok ? "true" : "false", "message": message]
-        if let json { info["json"] = json }
-        return info
+        ["id": id, "ok": ok ? "true" : "false", "message": message]
     }
 }
 
@@ -230,6 +229,6 @@ extension GatewayReply {
         guard let id = info["id"], let ok = info["ok"].flatMap({ ["true": true, "false": false][$0] }), let message = info["message"] else {
             return nil
         }
-        self.init(id: id, ok: ok, message: message, json: info["json"])
+        self.init(id: id, ok: ok, message: message)
     }
 }

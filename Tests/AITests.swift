@@ -33,6 +33,19 @@ func checkSettingsSave() {
         expect(after.escClears, false, "a window save writes the key it changed")
     }
 
+    // Loading reads sharing as off while collection is off. A window that then switches collection on must not
+    // bring back a `true` that was stored for sharing.
+    withScratchDefaults { defaults in
+        defaults.set(false, forKey: "collectStats")
+        defaults.set(true, forKey: "shareStats")
+        let stale = Settings.load(from: defaults)
+        expect(stale.shareStats, false, "sharing reads as off while collection is off")
+        var next = stale
+        next.collectStats = true
+        next.save(to: defaults, replacing: stale)
+        expect(Settings.load(from: defaults).shareStats, false, "switching collection on does not resume sharing")
+    }
+
     withScratchDefaults { defaults in
         Settings().save(to: defaults, replacing: Settings())
         expect(defaults.object(forKey: "toneStyle") == nil, true, "nothing changed, nothing written")
@@ -335,27 +348,34 @@ func checkAICommand() {
 }
 
 func checkGateway() {
+    let id = "5B9B2C0E-3E5B-4C58-9B1D-6D9E2B0F1A11"
     let requests: [GatewayRequest] = [
         .adjust(word: "cos", score: -2), .adjust(word: "x", score: 0), .forgetPhrase(prefix: "xin ch\u{00e0}o", word: "b\u{1ea1}n"),
         .forgetHabit(word: "d\u{00f9}ng"), .diaryClear, .snapshot(limit: 50),
     ]
     for request in requests {
-        let message = GatewayMessage(id: "abc", request: request)
+        let message = GatewayMessage(id: id, request: request)
         expect(GatewayMessage(userInfo: message.userInfo), message, "a message survives its userInfo: \(request)")
     }
-    expect(GatewayMessage(userInfo: ["id": "x"]) == nil, true, "a message needs a name")
+    expect(GatewayMessage(userInfo: ["id": id]) == nil, true, "a message needs a name")
     expect(GatewayMessage(userInfo: ["name": "diaryClear"]) == nil, true, "a message needs an id")
-    expect(GatewayMessage(userInfo: ["id": "x", "name": "explode"]) == nil, true, "an unknown name is not a message")
-    expect(GatewayMessage(userInfo: ["id": "x", "name": "adjust", "word": "cos"]) == nil, true, "adjust needs a score")
-    expect(GatewayMessage(userInfo: ["id": "x", "name": "adjust", "word": "cos", "score": "9"]) == nil, true, "a score out of range is not a message")
-    expect(GatewayMessage(userInfo: ["id": "x", "name": "snapshot", "limit": "0"]) == nil, true, "a limit below 1 is not a message")
-    expect(GatewayMessage(userInfo: ["id": "x", "name": "forgetPhrase", "prefix": "a"]) == nil, true, "forgetPhrase needs a word")
+    // The ID names the snapshot file the app writes, and any process can post a request, so it must be a UUID.
+    for bad in ["abc", "../x", "x/../../y", ""] {
+        expect(GatewayMessage(userInfo: ["id": bad, "name": "diaryClear"]) == nil, true, "an ID that is not a UUID is not a message: \(bad)")
+    }
+    expect(GatewayMessage(userInfo: ["id": id, "name": "explode"]) == nil, true, "an unknown name is not a message")
+    expect(GatewayMessage(userInfo: ["id": id, "name": "adjust", "word": "cos"]) == nil, true, "adjust needs a score")
+    expect(GatewayMessage(userInfo: ["id": id, "name": "adjust", "word": "cos", "score": "9"]) == nil, true, "a score out of range is not a message")
+    expect(GatewayMessage(userInfo: ["id": id, "name": "snapshot", "limit": "0"]) == nil, true, "a limit below 1 is not a message")
+    expect(GatewayMessage(userInfo: ["id": id, "name": "forgetPhrase", "prefix": "a"]) == nil, true, "forgetPhrase needs a word")
 
-    for reply in [GatewayReply(id: "abc", ok: true, message: "done", json: nil), GatewayReply(id: "abc", ok: false, message: "no", json: "{}")] {
+    // A reply says whether it worked. It never carries typed words: every process of the login session can read it.
+    for reply in [GatewayReply(id: id, ok: true, message: "done"), GatewayReply(id: id, ok: false, message: "no")] {
         expect(GatewayReply(userInfo: reply.userInfo), reply, "a reply survives its userInfo")
     }
-    expect(GatewayReply(userInfo: ["id": "x", "message": "m"]) == nil, true, "a reply needs ok")
-    expect(GatewayReply(userInfo: ["id": "x", "ok": "maybe", "message": "m"]) == nil, true, "ok is true or false")
+    expect(Set(GatewayReply(id: id, ok: true, message: "done").userInfo.keys), ["id", "ok", "message"], "a reply holds an ID, a verdict and a sentence")
+    expect(GatewayReply(userInfo: ["id": id, "message": "m"]) == nil, true, "a reply needs ok")
+    expect(GatewayReply(userInfo: ["id": id, "ok": "maybe", "message": "m"]) == nil, true, "ok is true or false")
     expect(Gateway.requestName != Gateway.replyName, true, "requests and replies travel on different names")
 }
 
@@ -521,4 +541,66 @@ func checkDiaryStore() {
     defaults.set(false, forKey: "keepsDiary")
     _ = DiaryStore(file: file, defaults: defaults)
     expect(waitUntil { !exists() }, true, "a launch with the switch off deletes the leftover file")
+
+    // A file that cannot be read is still words the user was told would go with the switch.
+    try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    try? Data("not json".utf8).write(to: file)
+    expect(exists(), true, "an unreadable diary file exists")
+    defaults.set(false, forKey: "keepsDiary")
+    _ = DiaryStore(file: file, defaults: defaults)
+    expect(waitUntil { !exists() }, true, "a diary file that cannot be read is deleted with the switch")
+}
+
+// MARK: Files
+
+func checkAIFiles() {
+    let dir = FileManager.default.temporaryDirectory.appendingPathComponent("ankey-aifiles-\(UUID().uuidString)")
+    defer { try? FileManager.default.removeItem(at: dir) }
+    let id = "5B9B2C0E-3E5B-4C58-9B1D-6D9E2B0F1A11"
+
+    // A snapshot of what the app holds goes to the command line as a file only the user can read.
+    do {
+        try AIFiles.writeSnapshot("{\"learned\":{}}", id: id, in: dir)
+        let mode = (try? FileManager.default.attributesOfItem(atPath: AIFiles.snapshotFile(id: id, in: dir).path))?[.posixPermissions] as? Int
+        expect(mode, 0o600, "a snapshot is readable by the user only")
+        expect(AIFiles.takeSnapshot(id: id, in: dir).flatMap { String(data: $0, encoding: .utf8) }, "{\"learned\":{}}", "taking a snapshot returns it")
+        expect(FileManager.default.fileExists(atPath: AIFiles.snapshotFile(id: id, in: dir).path), false, "taking a snapshot deletes it")
+        expect(AIFiles.takeSnapshot(id: id, in: dir) == nil, true, "a snapshot that is not there is nil")
+    } catch { failed += 1; fputs("FAIL snapshot: \(error)\n", stderr) }
+
+    // One the command line never took (it was killed) is typed words left behind: old ones are deleted.
+    do {
+        let old = "AAAAAAAA-3E5B-4C58-9B1D-6D9E2B0F1A11"
+        try AIFiles.writeSnapshot("{}", id: old, in: dir)
+        try AIFiles.writeSnapshot("{}", id: id, in: dir)
+        let past = Date(timeIntervalSinceNow: -600)
+        try FileManager.default.setAttributes([.modificationDate: past], ofItemAtPath: AIFiles.snapshotFile(id: old, in: dir).path)
+        AIFiles.sweepSnapshots(olderThan: 60, in: dir)
+        expect(FileManager.default.fileExists(atPath: AIFiles.snapshotFile(id: old, in: dir).path), false, "an old snapshot is swept")
+        expect(FileManager.default.fileExists(atPath: AIFiles.snapshotFile(id: id, in: dir).path), true, "a new snapshot is kept")
+    } catch { failed += 1; fputs("FAIL sweep: \(error)\n", stderr) }
+
+    // Two command lines at once (an AI may run two commands in one turn) must not lose a change.
+    do {
+        let count = 24
+        DispatchQueue.concurrentPerform(iterations: count) { index in
+            try? AIFiles.updateChangeLog(in: dir) { log in
+                log.record(Change(time: Date(), summary: "change \(index)", undo: nil))
+            }
+        }
+        let log = AIFiles.readChangeLog(in: dir)
+        expect(log.changes.count, count, "every change made at the same time is in the log")
+        expect(Set(log.changes.map(\.summary)).count, count, "no change is in the log twice")
+    }
+
+    // A change that fails to apply leaves the log as it was.
+    do {
+        struct Refused: Error {}
+        let before = AIFiles.readChangeLog(in: dir)
+        _ = try? AIFiles.updateChangeLog(in: dir) { (log: inout ChangeLog) -> Int in
+            log.record(Change(time: Date(), summary: "never written", undo: nil))
+            throw Refused()
+        }
+        expect(AIFiles.readChangeLog(in: dir), before, "a failed update leaves the log alone")
+    }
 }

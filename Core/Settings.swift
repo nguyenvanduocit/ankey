@@ -187,7 +187,11 @@ extension Settings {
         put(\.learnsLanguage, Key.learnsLanguage)
         put(\.keepsDiary, Key.keepsDiary)
         put(\.collectStats, Key.collectStats)
-        put(\.shareStats, Key.shareStats)
+        // Loading reads sharing as off while collection is off, so a window's copy says off there. Writing it
+        // whenever collection changes keeps a `true` stored earlier from coming back when collection is turned on.
+        if old.map({ $0.shareStats != shareStats || $0.collectStats != collectStats }) ?? true {
+            defaults.set(shareStats, forKey: Key.shareStats)
+        }
         put(\.onboardingSeen, Key.onboardingSeen)
         put(\.shorthand, Key.shorthand)
         put(\.appRules, Key.appRules) { $0.map(\.stored) }

@@ -61,8 +61,8 @@ enum AICLI {
 
     /// The running app's answer, or the files when it is not running or does not answer.
     private static func memorySnapshot(limit: Int) -> [String: Any] {
-        if isRunning, let reply = ask(.snapshot(limit: limit)), reply.ok, let json = reply.json,
-           let object = (try? JSONSerialization.jsonObject(with: Data(json.utf8))) as? [String: Any] {
+        if isRunning, let reply = ask(.snapshot(limit: limit)), reply.ok, let data = AIFiles.takeSnapshot(id: reply.id),
+           let object = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] {
             return object
         }
         return AIReport.snapshot(
@@ -106,19 +106,17 @@ enum AICLI {
     }
 
     private static func undo() -> Int32 {
-        var log = AIFiles.readChangeLog()
-        guard let popped = log.popUndo() else { return fail(.failed("Nothing to undo.")) }
-        let before = Settings.load()
         do {
-            let result = try popped.edit.applying(to: before)
-            try AIFiles.writeChangeLog(log)
-            result.settings.save(replacing: before)
-            followUp(from: before, to: result.settings)
-            return emit([
-                "ok": true,
-                "undone": popped.change.summary,
-                "now": result.change?.summary ?? "no change: the setting already had that value",
-            ])
+            // The log gives up the change only if the edit applies: a failure leaves the log as it was.
+            let undone = try AIFiles.updateChangeLog { log -> (summary: String, before: Settings, after: Settings, now: String) in
+                guard let popped = log.popUndo() else { throw AIError.failed("Nothing to undo.") }
+                let before = Settings.load()
+                let result = try popped.edit.applying(to: before)
+                return (popped.change.summary, before, result.settings, result.change?.summary ?? "no change: the setting already had that value")
+            }
+            undone.after.save(replacing: undone.before)
+            followUp(from: undone.before, to: undone.after)
+            return emit(["ok": true, "undone": undone.summary, "now": undone.now])
         } catch let error as AIError {
             return fail(error)
         } catch {
@@ -148,9 +146,7 @@ enum AICLI {
     }
 
     private static func record(_ change: Change) throws {
-        var log = AIFiles.readChangeLog()
-        log.record(change)
-        try AIFiles.writeChangeLog(log)
+        try AIFiles.updateChangeLog { $0.record(change) }
     }
 
     // MARK: Gateway

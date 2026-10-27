@@ -1603,6 +1603,7 @@ struct TestRunner {
         checkAIFollowUps()
         checkAIGuide()
         checkDiaryStore()
+        checkAIFiles()
         checkAppRules()
         checkStats()
         checkStatsUpload()

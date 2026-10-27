@@ -26,7 +26,8 @@ final class DiaryStore: @unchecked Sendable {
         self.defaults = defaults
         let stored = (try? Data(contentsOf: file)).flatMap { try? JSONDecoder().decode(Diary.self, from: $0) }
         diary = stored ?? Diary()
-        mayHoldData = stored != nil
+        // A file that cannot be decoded is still words the user was told would go with the switch.
+        mayHoldData = FileManager.default.fileExists(atPath: file.path)
         dropIfOff()
     }
 

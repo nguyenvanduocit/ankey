@@ -10,6 +10,8 @@ final class AIReceiver: NSObject {
     static let shared = AIReceiver()
 
     func start() {
+        // A snapshot the command line never took, left by a crash, is typed words on disk.
+        AIFiles.sweepSnapshots(olderThan: 0)
         // Delivered at once: Ankey is never the active app, and a background app would otherwise get the request
         // only when it next became active.
         DistributedNotificationCenter.default().addObserver(
@@ -25,8 +27,8 @@ final class AIReceiver: NSObject {
     }
 
     private func serve(_ message: GatewayMessage) -> GatewayReply {
-        func reply(_ ok: Bool, _ text: String, json: String? = nil) -> GatewayReply {
-            GatewayReply(id: message.id, ok: ok, message: text, json: json)
+        func reply(_ ok: Bool, _ text: String) -> GatewayReply {
+            GatewayReply(id: message.id, ok: ok, message: text)
         }
         switch message.request {
         case .adjust(let word, let score):
@@ -58,6 +60,7 @@ final class AIReceiver: NSObject {
             DiaryStore.shared.forgetAll()
             return reply(true, "The diary is empty.")
         case .snapshot(let limit):
+            AIFiles.sweepSnapshots()
             let report = AIReport.snapshot(
                 adjust: AdjustStore.shared.words,
                 phrases: PersonalPhrasesStore.shared.learned(limit: limit),
@@ -65,7 +68,13 @@ final class AIReceiver: NSObject {
                 diary: DiaryStore.shared.snapshot(),
                 limit: limit,
                 source: "live")
-            return reply(true, "ok", json: AIJSON.text(report))
+            // As a file, not in the reply: every process of the login session can read a distributed notification.
+            do {
+                try AIFiles.writeSnapshot(AIJSON.text(report), id: message.id)
+            } catch {
+                return reply(false, "Could not write the snapshot: \(error.localizedDescription)")
+            }
+            return reply(true, "ok")
         }
     }
 }
