@@ -154,6 +154,7 @@ struct OnboardingView: View {
                 Text("Esc trả lại chữ đã gõ: Ankey đã đổi test thành tét thì bấm Esc để về test.")
                 Text("Mỗi ứng dụng chọn tắt Ankey, gạch chân hoặc chèn trực tiếp ở thẻ Ứng dụng.")
                 Text("Từ viết tắt như đc nằm ở thẻ Viết tắt.")
+                Text("AI của bạn đọc và chỉnh được cài đặt Ankey: xem thẻ AI.")
             }
             PixelSection(
                 title: "Mã gõ nhanh",

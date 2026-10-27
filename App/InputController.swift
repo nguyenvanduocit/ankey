@@ -223,6 +223,9 @@ final class AnkeyInputController: IMKInputController {
         let help = NSMenuItem(title: "Trợ giúp…", action: #selector(showHelp(_:)), keyEquivalent: "")
         help.target = self
         menu.addItem(help)
+        let ai = NSMenuItem(title: "Cho AI cấu hình…", action: #selector(showAISettings(_:)), keyEquivalent: "")
+        ai.target = self
+        menu.addItem(ai)
         let feedback = NSMenuItem(title: "Gửi góp ý…", action: #selector(startFeedback(_:)), keyEquivalent: "")
         feedback.target = self
         menu.addItem(feedback)
@@ -288,6 +291,10 @@ final class AnkeyInputController: IMKInputController {
     /// The menu item and the `///ankey` code both open Settings here. IMK and AppKit call on the main thread.
     @objc private func showSettings(_ sender: Any?) {
         MainActor.assumeIsolated { SettingsWindowController.shared.show() }
+    }
+
+    @objc private func showAISettings(_ sender: Any?) {
+        MainActor.assumeIsolated { SettingsWindowController.shared.show(tab: .ai) }
     }
 
     /// The caret may now sit anywhere, so the words typed before say nothing about the next one.

@@ -7,16 +7,25 @@ final class SettingsModel: ObservableObject {
     @Published var value = Settings.load() {
         didSet { value.save(replacing: oldValue) }
     }
+    @Published var tab = SettingsTab.general
+
+    /// The window is built once and shown again, and the command line may have changed settings since: read them
+    /// again whenever the window comes forward.
+    func reload() {
+        let fresh = Settings.load()
+        if fresh != value { value = fresh }
+    }
 }
 
 enum SettingsTab: CaseIterable {
-    case general, shorthand, apps, stats, updates
+    case general, shorthand, apps, ai, stats, updates
 
     var title: String {
         switch self {
         case .general: return "Chung"
         case .shorthand: return "Viết tắt"
         case .apps: return "Ứng dụng"
+        case .ai: return "AI"
         case .stats: return "Thống kê"
         case .updates: return "Cập nhật"
         }
@@ -25,26 +34,26 @@ enum SettingsTab: CaseIterable {
 
 struct SettingsView: View {
     @ObservedObject var model: SettingsModel
-    @State private var tab = SettingsTab.general
 
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 2 * Pixel.unit) {
                 ForEach(SettingsTab.allCases, id: \.self) { item in
-                    Button { tab = item } label: {
+                    Button { model.tab = item } label: {
                         Text(item.title).frame(maxWidth: .infinity)
                     }
-                    .buttonStyle(PixelButtonStyle(primary: tab == item))
+                    .buttonStyle(PixelButtonStyle(primary: model.tab == item))
                 }
             }
             .padding(.horizontal, 8 * Pixel.unit)
             .padding(.top, Pixel.unit)
             .padding(.bottom, 4 * Pixel.unit)
 
-            switch tab {
+            switch model.tab {
             case .general: GeneralTab(model: model)
             case .shorthand: ShorthandTab(model: model)
             case .apps: AppsTab(model: model)
+            case .ai: AITab(model: model)
             case .stats: StatsTab(model: model)
             case .updates: UpdatesTab()
             }
@@ -53,6 +62,7 @@ struct SettingsView: View {
         .foregroundStyle(Pixel.text)
         .frame(width: 520, height: 440)
         .background(Pixel.bg)
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { _ in model.reload() }
     }
 }
 
@@ -77,8 +87,9 @@ final class SettingsWindowController: NSWindowController {
         fatalError("init(coder:) is not supported")
     }
 
-    func show() {
-        model.value = Settings.load()
+    func show(tab: SettingsTab? = nil) {
+        model.reload()
+        if let tab { model.tab = tab }
         NSApp.activate(ignoringOtherApps: true)
         window?.center()
         showWindow(nil)

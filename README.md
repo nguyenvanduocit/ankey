@@ -85,3 +85,16 @@ Bộ nhớ có trần cứng, nên cái mới vào thì cái ít giá trị nh�
 Điểm quyết định một chữ là tiếng Anh hay tiếng Việt chỉ biết ngôn ngữ của từ liền trước. Chữ tiếng Anh đầu tiên sau chữ Việt vì thế không được giúp gì: `as` sau `tôi dùng` vẫn ra `á`. Bật "Học khi nào bạn gõ tiếng Anh" thì Ankey nhớ sau từ nào bạn thường gõ tiếng Anh hay tiếng Việt, và khi một chữ có thể là cả hai thì cộng hoặc trừ một điểm theo thói quen đó (cùng cỡ với điểm của từ liền trước). Một từ chỉ "nghiêng" khi có ít nhất 8 mẫu và 90% thuộc một thứ tiếng. Thói quen tiếng Việt không bao giờ biến một từ tiếng Anh luôn nằm trong danh sách (`test`) thành tiếng Việt.
 
 Ankey chỉ học từ những chữ chắc chắn (không nằm trong danh sách tiếng Anh, nên điểm không quyết định chúng) và từ những lần bạn tự chọn: Esc, Shift+Esc, xoá rồi gõ lại, mỗi lần tính bằng 4 mẫu. Học từ chính các quyết định mơ hồ của Ankey sẽ tự củng cố lỗi của nó, nên không làm vậy. Bảng có trần 4.000 từ đứng trước (khoảng 1 MB), mỗi từ giữ hai bộ đếm, số đếm giảm một nửa sau 60 ngày không gặp, mỗi lần ghi thêm một mẫu thì cả hai bộ đếm giảm thêm 3% (nên một từ chỉ nhớ khoảng 30 mẫu gần nhất: thói quen đã học rất chắc mà bạn đổi hẳn thì Ankey thôi nghiêng sau chưa đầy chục lần và nghiêng sang bên mới sau khoảng 70 lần, không phụ thuộc cái cũ đã học bao nhiêu lần),, và khi đầy thì bỏ 10% từ có điểm thấp nhất, điểm là số mẫu (chặn ở 50) nhân bình phương độ nghiêng. Tắt mặc định vì file `language-habits.json` chứa các từ bạn gõ. Xem và xoá từng từ trong Cài đặt.
+
+## Cho AI cấu hình Ankey
+
+AI của bạn (Claude Code, Codex, Cursor, bất kỳ AI nào chạy được lệnh shell) có thể đọc những gì Ankey biết về bạn và chỉnh cài đặt giúp bạn. Không cần cài thêm gì: dòng lệnh là chính file chạy của Ankey, `~/Library/Input Methods/Ankey.app/Contents/MacOS/Ankey`.
+
+Mở Cài đặt, thẻ **AI** (hoặc menu bộ gõ, **Cho AI cấu hình…**), bấm **Sao chép lời nhắc** rồi dán vào AI. AI chạy `Ankey guide` để biết các lệnh:
+
+- đọc: `show` in cài đặt, những gì Ankey đã học, số đếm theo ngày và nhật ký;
+- chỉnh: `set`, `shorthand`, `app`, `learned`. Mọi lệnh sửa có `--dry-run` để xem trước, và `undo` hoàn tác thay đổi mới nhất.
+
+AI chỉ được tắt, không bao giờ được bật các mục lưu chữ bạn gõ hay gửi đi (học cụm từ, học ngôn ngữ, thống kê, chia sẻ, nhật ký): bạn tự bật trong Cài đặt. Những gì AI đã chỉnh hiện trong thẻ AI, kèm nút Hoàn tác.
+
+Nhật ký tắt mặc định. Khi bật, Ankey ghi những từ bạn lấy lại (Esc, Shift+Esc, xoá rồi gõ lại) cùng phím đã gõ, chữ Ankey đã hiện và ứng dụng, và đếm số từ gõ trong mỗi ứng dụng, để AI thấy ứng dụng nào Ankey hay gõ sai. File `~/Library/Application Support/Ankey/diary.json` chỉ bạn đọc được, giữ tối đa 2.000 mục trong 30 ngày, không gửi đi và không nằm trong thống kê. Tắt nhật ký là xoá hết.
