@@ -127,6 +127,9 @@ final class AnkeyInputController: IMKInputController {
             case .settings:
                 refresh(sender, ctx)
                 showSettings(nil)
+            case .prompt:
+                refresh(sender, ctx)
+                insertPrompt(sender)
             }
             return true
         }
@@ -295,6 +298,11 @@ final class AnkeyInputController: IMKInputController {
 
     @objc private func showAISettings(_ sender: Any?) {
         MainActor.assumeIsolated { SettingsWindowController.shared.show(tab: .ai) }
+    }
+
+    /// `///ai` shows nothing: the prompt for the user's AI is typed into the document where the code was.
+    private func insertPrompt(_ sender: Any!) {
+        textClient(sender)?.insertText(AIPrompt.text(executable: Bundle.main.executablePath ?? "Ankey"), replacementRange: anywhere)
     }
 
     /// The caret may now sit anywhere, so the words typed before say nothing about the next one.

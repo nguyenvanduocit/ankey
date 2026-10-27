@@ -10,15 +10,13 @@ struct AITab: View {
     private var executable: String { Bundle.main.executablePath ?? "Ankey" }
 
     /// What the user pastes into their AI. The guide is served by the installed app, so it matches this version.
-    private var prompt: String {
-        "Chạy \"\(executable)\" guide rồi làm theo hướng dẫn đó để đọc cài đặt bộ gõ Ankey của tôi và giúp tôi chỉnh nó."
-    }
+    private var prompt: String { AIPrompt.text(executable: executable) }
 
     var body: some View {
         PixelPage {
             PixelSection(
                 title: "Kết nối AI",
-                footer: "Dán lời nhắc vào AI chạy được lệnh shell (Claude Code, Codex, Cursor…). AI chạy Ankey guide để biết các lệnh, đọc cài đặt, những gì Ankey đã học và số đếm, rồi đề nghị thay đổi cho bạn duyệt. Mọi thứ nằm trên máy này. AI chỉ được tắt, không bao giờ được bật các mục lưu chữ bạn gõ."
+                footer: "Dán lời nhắc vào AI chạy được lệnh shell (Claude Code, Codex, Cursor…), hoặc gõ ///ai vào ô chat của AI để Ankey điền lời nhắc tại chỗ. AI chạy Ankey guide để biết các lệnh, đọc cài đặt, những gì Ankey đã học và số đếm, rồi đề nghị thay đổi cho bạn duyệt. Mọi thứ nằm trên máy này. AI chỉ được tắt, không bao giờ được bật các mục lưu chữ bạn gõ."
             ) {
                 Button(copied ? "Đã sao chép" : "Sao chép lời nhắc", action: copyPrompt)
                     .buttonStyle(PixelButtonStyle(primary: true))

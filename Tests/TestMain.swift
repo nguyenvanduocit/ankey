@@ -1605,6 +1605,8 @@ struct TestRunner {
         checkDiaryStore()
         checkAIFiles()
         checkSettingTabs()
+        checkAIPrompt()
+        checkPromptTrigger()
         checkAppRules()
         checkStats()
         checkStatsUpload()

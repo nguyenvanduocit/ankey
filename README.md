@@ -90,7 +90,7 @@ Ankey chỉ học từ những chữ chắc chắn (không nằm trong danh sác
 
 AI của bạn (Claude Code, Codex, Cursor, bất kỳ AI nào chạy được lệnh shell) có thể đọc những gì Ankey biết về bạn và chỉnh cài đặt giúp bạn. Không cần cài thêm gì: dòng lệnh là chính file chạy của Ankey, `~/Library/Input Methods/Ankey.app/Contents/MacOS/Ankey`.
 
-Mở Cài đặt, thẻ **AI** (hoặc menu bộ gõ, **Cho AI cấu hình…**), bấm **Sao chép lời nhắc** rồi dán vào AI. AI chạy `Ankey guide` để biết các lệnh:
+Mở Cài đặt, thẻ **AI** (hoặc menu bộ gõ, **Cho AI cấu hình…**), bấm **Sao chép lời nhắc** rồi dán vào AI. Nhanh hơn: gõ `///ai` vào ô chat của AI, Ankey điền lời nhắc ngay tại chỗ, không hiện cửa sổ nào. AI chạy `Ankey guide` để biết các lệnh:
 
 - đọc: `show` in cài đặt, những gì Ankey đã học, số đếm theo ngày và nhật ký;
 - chỉnh: `set`, `shorthand`, `app`, `learned`. Mọi lệnh sửa có `--dry-run` để xem trước, và `undo` hoàn tác thay đổi mới nhất.

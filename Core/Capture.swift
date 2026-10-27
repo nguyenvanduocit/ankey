@@ -5,21 +5,24 @@ enum ReportKind: String, CaseIterable {
     case bug, feedback
 }
 
-/// A cheat code typed at the start of a word. A report code opens a report; the settings code acts at once.
+/// A cheat code typed at the start of a word. A report code opens a report; the settings and prompt codes act at once.
 enum Trigger: Equatable {
     case report(ReportKind)
     case settings
+    /// Types the prompt that points the user's AI at the guide, where the code was typed.
+    case prompt
 
     static let prefix = "///"
 
     /// Every cheat code. A new one is added here and nowhere else in the matcher.
-    static let all: [Trigger] = ReportKind.allCases.map(Trigger.report) + [.settings]
+    static let all: [Trigger] = ReportKind.allCases.map(Trigger.report) + [.settings, .prompt]
 
     /// The name typed after the slashes.
     var name: String {
         switch self {
         case .report(let kind): return kind.rawValue
         case .settings: return "ankey"
+        case .prompt: return "ai"
         }
     }
 

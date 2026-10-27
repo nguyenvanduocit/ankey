@@ -18,7 +18,7 @@ private func typed(_ keys: String, _ settings: Settings = Settings(), kind: Repo
 
 func checkTriggers() {
     // The code is `///` plus a name, and it can still grow while the typed text is a prefix.
-    expect(Trigger.all.map(\.code), ["///bug", "///feedback", "///ankey"], "every code is in the one list")
+    expect(Trigger.all.map(\.code), ["///bug", "///feedback", "///ankey", "///ai"], "every code is in the one list")
     expect(Trigger.report(.bug).code, "///bug", "bug code")
     expect(Trigger.report(.feedback).code, "///feedback", "feedback code")
     expect(Trigger.settings.code, "///ankey", "settings code")

@@ -618,3 +618,43 @@ func checkSettingTabs() {
     expect(SettingKey.collectStats.tab, "Th\u{1ed1}ng k\u{00ea}", "collectStats is in the Thống kê tab")
     expect(AIError.humanOnly("learnsPhrases").message.contains("tab AI"), true, "the refusal for learnsPhrases names the AI tab")
 }
+
+// MARK: The AI prompt and its cheat code
+
+func checkAIPrompt() {
+    let path = "/Users/x/Library/Input Methods/Ankey.app/Contents/MacOS/Ankey"
+    let text = AIPrompt.text(executable: path)
+    expect(text.contains("\"\(path)\" guide"), true, "the prompt quotes the executable, which has spaces in its path, and says guide")
+    // A chat box that sends on Return must not send it half typed.
+    expect(text.contains("\n"), false, "the prompt is one line")
+    expect(text.isEmpty, false, "the prompt has words")
+}
+
+func checkPromptTrigger() {
+    expect(Trigger.prompt.code, "///ai", "the AI code")
+    expect(Trigger(typed: "///ai"), .prompt, "exact AI code")
+    expect(Trigger(typed: "///AI"), .prompt, "the AI code ignores case")
+    for text in ["///a", "///ai", "///AI"] { expect(Trigger.canStart(text), true, "\(text) can still become a trigger") }
+    for text in ["///aix", "///ai ", "///aii", "///a i", "//ai"] { expect(Trigger.canStart(text), false, "\(text) cannot become a trigger") }
+    expect(Trigger(typed: "///aix"), nil, "///aix is not a trigger")
+
+    // It acts at once, like the settings code: held while it can grow, gone when it completes.
+    var session = Session()
+    for ch in "///a" { _ = session.push(ch) }
+    expect(session.isHolding, true, "the prefix shared with ankey is held")
+    expect(session.push("i"), .cheat(.prompt), "i completes the AI code")
+    expect(session.isComposing, false, "activation leaves nothing pending")
+    expect(session.display(Settings()), "", "activation leaves nothing to show")
+
+    // The other branch from the same prefix still completes.
+    session = Session()
+    var last = Push.pass
+    for ch in "///ankey" { last = session.push(ch) }
+    expect(last, .cheat(.settings), "the settings code still completes after the shared prefix")
+
+    // A word that merely starts like the code is an ordinary word.
+    session = Session()
+    var pushes: [Push] = []
+    for ch in "///air" { pushes.append(session.push(ch)) }
+    expect(pushes.contains(.cheat(.prompt)), true, "the code fires as soon as it is complete")
+}

@@ -15,6 +15,8 @@ extension Trigger {
             }
         case .settings:
             return "Mở Cài đặt."
+        case .prompt:
+            return "Điền lời nhắc cho AI của bạn."
         }
     }
 }
