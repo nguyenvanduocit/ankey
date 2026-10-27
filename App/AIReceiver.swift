@@ -35,6 +35,9 @@ final class AIReceiver: NSObject {
             guard score == 0 || English.knows(word) else {
                 return reply(false, "\"\(word)\" is not a word Ankey knows as English, so there is no English side to adjust.")
             }
+            guard score != 0 || AdjustStore.shared.words[word] != nil else {
+                return reply(false, "\"\(word)\" has no learned score to forget.")
+            }
             AdjustStore.shared.set(word, to: score)
             return reply(true, score == 0 ? "Forgot \"\(word)\"." : "\"\(word)\" now has the score \(score).")
         case .forgetPhrase(let prefix, let word):

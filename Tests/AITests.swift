@@ -454,3 +454,71 @@ func checkAIGuide() {
     for event in StatsEvent.allCases { expect(guide.contains(event.rawValue), true, "the guide explains the counter \(event.rawValue)") }
     for kind in DiaryKind.allCases { expect(guide.contains(kind.rawValue), true, "the guide explains the diary kind \(kind.rawValue)") }
 }
+
+// MARK: Diary store
+
+private func waitUntil(_ condition: () -> Bool) -> Bool {
+    for _ in 0..<100 {
+        if condition() { return true }
+        Thread.sleep(forTimeInterval: 0.02)
+    }
+    return condition()
+}
+
+func checkDiaryStore() {
+    let suite = "ankey.tests.diarystore.\(UUID().uuidString)"
+    let defaults = UserDefaults(suiteName: suite)!
+    let dir = FileManager.default.temporaryDirectory.appendingPathComponent("ankey-diary-\(UUID().uuidString)")
+    defer {
+        defaults.removePersistentDomain(forName: suite)
+        try? FileManager.default.removeItem(at: dir)
+    }
+    let file = dir.appendingPathComponent("diary.json")
+    func exists() -> Bool { FileManager.default.fileExists(atPath: file.path) }
+
+    // Off: nothing is kept, nothing is written.
+    let store = DiaryStore(file: file, defaults: defaults)
+    store.record(.escRestoredRaw, raw: "vieetj", shown: "vi\u{1ec7}t", app: "com.t")
+    store.countWord(app: "com.t")
+    store.flush()
+    Thread.sleep(forTimeInterval: 0.2)
+    expect(store.snapshot() == nil, true, "an off diary reads as off")
+    expect(exists(), false, "an off diary writes no file")
+
+    // On: events are kept, written with a mode only the user can read, and survive a restart.
+    defaults.set(true, forKey: "keepsDiary")
+    store.record(.escRestoredRaw, raw: "vieetj", shown: "vi\u{1ec7}t", app: "com.t")
+    store.countWord(app: "com.t")
+    expect(store.snapshot()?.entries.count, 1, "an on diary keeps an event")
+    expect(store.snapshot()?.words.values.flatMap(\.values).reduce(0, +), 1, "an on diary counts a word")
+    store.flush()
+    expect(waitUntil(exists), true, "flushing writes the file")
+    let mode = (try? FileManager.default.attributesOfItem(atPath: file.path))?[.posixPermissions] as? Int
+    expect(waitUntil { ((try? FileManager.default.attributesOfItem(atPath: file.path))?[.posixPermissions] as? Int) == 0o600 }, true, "the file is readable by the user only (mode \(String(describing: mode)))")
+    let restarted = DiaryStore(file: file, defaults: defaults)
+    expect(restarted.snapshot()?.entries.first?.raw, "vieetj", "a new store reads what was written")
+
+    // Switching off deletes what was kept, in the file and in memory.
+    defaults.set(false, forKey: "keepsDiary")
+    store.flush()
+    expect(waitUntil { !exists() }, true, "an off switch deletes the file at the next flush")
+    expect(store.snapshot() == nil, true, "an off diary reads as off after the switch")
+    defaults.set(true, forKey: "keepsDiary")
+    expect(store.snapshot()?.entries.count, 0, "a diary switched on again starts empty")
+
+    // Forgetting removes the file even while the diary is on.
+    store.record(.flipToEnglish, raw: "as", shown: "\u{00e1}", app: "com.t")
+    store.flush()
+    expect(waitUntil(exists), true, "the diary is written again")
+    store.forgetAll()
+    expect(waitUntil { !exists() }, true, "forgetting deletes the file")
+    expect(store.snapshot()?.entries.count, 0, "forgetting empties the diary")
+
+    // A file left from when the diary was on does not survive a launch with the switch off.
+    store.record(.flipToEnglish, raw: "as", shown: "\u{00e1}", app: "com.t")
+    store.flush()
+    expect(waitUntil(exists), true, "a leftover file exists")
+    defaults.set(false, forKey: "keepsDiary")
+    _ = DiaryStore(file: file, defaults: defaults)
+    expect(waitUntil { !exists() }, true, "a launch with the switch off deletes the leftover file")
+}

@@ -12,7 +12,7 @@ APP="$ROOT/dist/Ankey.app"
 
 swiftc -swift-version 5 -target arm64-apple-macosx13.0 \
     -o /tmp/ankey-tests \
-    "$ROOT"/Core/*.swift "$ROOT"/Tests/*.swift
+    "$ROOT"/Core/*.swift "$ROOT/App/AIFiles.swift" "$ROOT/App/DiaryStore.swift" "$ROOT"/Tests/*.swift
 /tmp/ankey-tests
 
 rm -rf "$APP"
