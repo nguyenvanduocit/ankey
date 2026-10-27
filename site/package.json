@@ -1,0 +1,11 @@
+{
+  "name": "ankey-site",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "gen": "bun scripts/gen-data.ts",
+    "dev": "bunx wrangler dev",
+    "test": "bun test",
+    "deploy": "bun run gen && bun test && bunx wrangler deploy"
+  }
+}

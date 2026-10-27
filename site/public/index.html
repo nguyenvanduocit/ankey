@@ -1,0 +1,290 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ankey: bộ gõ Telex cho macOS giữ nguyên tiếng Anh</title>
+  <meta name="description" content="Ankey là bộ gõ Telex cho macOS. Nó nhận ra khi bạn gõ tiếng Anh, nên test không thành tét và git reset không phải sửa lại.">
+  <meta name="theme-color" content="#F5F6FA">
+  <link rel="canonical" href="https://ankey.aiocean.io/">
+  <link rel="icon" type="image/png" href="/favicon.png">
+  <link rel="apple-touch-icon" href="/icon.png">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Ankey: bộ gõ Telex cho macOS giữ nguyên tiếng Anh">
+  <meta property="og:description" content="Gõ tiếng Việt bằng Telex. Từ tiếng Anh vẫn giữ nguyên.">
+  <meta property="og:url" content="https://ankey.aiocean.io/">
+  <meta property="og:image" content="https://ankey.aiocean.io/og.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="preload" href="/fonts/bricolage-grotesque-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/be-vietnam-pro-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/vt323-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/style.css">
+  <script type="module" src="/playground.js"></script>
+  <script type="module" src="/install-tour.js"></script>
+</head>
+<body>
+  <a class="skip" href="#main">Bỏ qua phần đầu trang</a>
+
+  <header class="bar">
+    <a class="brand" href="/" aria-label="Ankey, trang chủ">
+      <img src="/icon.png" width="36" height="36" alt="">
+      <span class="wordmark">Ankey</span>
+    </a>
+    <nav aria-label="Liên kết">
+      <a href="#cai-dat">Cài đặt</a>
+      <a href="https://github.com/nguyenvanduocit/ankey">GitHub</a>
+    </nav>
+  </header>
+
+  <main id="main">
+    <section class="hero wrap">
+      <h1><span>Gõ tiếng Việt bằng Telex.</span> <span>Từ tiếng Anh vẫn giữ nguyên.</span></h1>
+      <p class="lead">Ankey là bộ gõ Telex cho macOS. Nó nhận ra khi bạn đang gõ tiếng Anh, nên <code>test</code> không thành <code>tét</code> và <code>git reset</code> không phải sửa lại.</p>
+
+      <div class="install">
+        <code class="cmd" id="cmd-hero">curl -fsSL https://raw.githubusercontent.com/nguyenvanduocit/ankey/main/install.sh | sh</code>
+        <button class="btn" type="button" data-copy="#cmd-hero">Sao chép lệnh cài</button>
+      </div>
+      <p class="fine">Cần macOS 13 trở lên và chip Apple silicon. <span data-version>Bản mới nhất nằm ở trang phát hành.</span> <a href="https://github.com/nguyenvanduocit/ankey/releases/latest">Xem các bản phát hành</a></p>
+    </section>
+
+    <section class="wrap" aria-labelledby="thu-go">
+      <div class="stage" data-stage tabindex="0" role="textbox" aria-multiline="true" aria-labelledby="thu-go" aria-describedby="stage-help">
+        <div class="stage-bar">
+          <span class="lights" aria-hidden="true"><i></i><i></i><i></i></span>
+          <h2 id="thu-go">Thử gõ</h2>
+        </div>
+        <p class="stage-help" id="stage-help">
+          <span class="for-keyboard">Bấm vào khung và gõ bằng Telex. Cùng một dãy phím, hai kết quả.</span>
+          <span class="for-touch">Chọn một ví dụ để xem hai kết quả cho cùng một dãy phím.</span>
+        </p>
+
+        <div class="keys" aria-hidden="true">
+          <span class="keys-label">Phím</span>
+          <span class="keys-row" data-keys></span>
+        </div>
+
+        <div class="panes">
+          <div class="pane" data-tone="plain">
+            <h3>Telex thông thường</h3>
+            <p class="out" data-out="plain" aria-live="off"></p>
+          </div>
+          <div class="pane" data-tone="ankey">
+            <h3>Ankey</h3>
+            <p class="out" data-out="ankey" aria-live="off"></p>
+          </div>
+        </div>
+
+        <div class="stage-foot">
+          <div class="presets" role="group" aria-label="Ví dụ">
+            <button class="chip" type="button" data-preset="Tieengs Vieetj ddepj quas, mootj ngayf nawngs.">Tiếng Việt</button>
+            <button class="chip" type="button" data-autoplay data-preset="Tooi dungf git reset roiof chayj test laij.">Lẫn tiếng Anh</button>
+            <button class="chip" type="button" data-preset="carm own, git commit as roiof.">Theo từ đứng trước</button>
+            <button class="chip" type="button" data-clear>Xoá</button>
+          </div>
+          <p class="legend">
+            <span class="w vi">đã bỏ dấu</span>
+            <span class="w kept">giữ nguyên tiếng Anh</span>
+            <span class="w wrong">khác với Ankey</span>
+          </p>
+        </div>
+      </div>
+      <p class="fine stage-note">Esc trả lại phím vừa gõ, Shift+Esc đổi cách đọc từ đang gõ. Bản trong trình duyệt dùng cùng danh sách âm tiết và từ tiếng Anh với app, nhưng không có phần học theo thói quen của bạn.</p>
+    </section>
+
+    <section class="wrap block" aria-labelledby="sai-o-dau">
+      <h2 id="sai-o-dau">Những chỗ Telex thuần gõ sai</h2>
+      <p class="intro">Luật Telex chỉ nhìn phím. <code>test</code> thành <code>tét</code> hay <code>does</code> thành <code>doé</code> đều hợp luật, nên Telex thuần đặt dấu mà không hỏi bạn có đang gõ tiếng Việt không. Ankey xét thêm bốn điều trước khi đặt dấu.</p>
+
+      <table class="ledger" data-ledger>
+        <caption class="sr-only">Cùng một dãy phím cho kết quả khác nhau giữa Telex thông thường và Ankey</caption>
+        <thead>
+          <tr><th scope="col">Bạn gõ</th><th scope="col">Telex thông thường</th><th scope="col">Ankey</th><th scope="col">Vì sao</th></tr>
+        </thead>
+        <tbody>
+          <tr data-keys="test"><td></td><td></td><td></td><td>Có trong danh sách từ tiếng Anh, nên giữ nguyên.</td></tr>
+          <tr data-keys="does"><td></td><td></td><td></td><td><code>doé</code> không phải âm tiết tiếng Việt.</td></tr>
+          <tr data-keys="cos"><td></td><td></td><td></td><td><code>có</code> là dạng rất phổ biến, nên tiếng Việt thắng.</td></tr>
+          <tr data-keys="git commit as"><td></td><td></td><td></td><td><code>as</code> đứng sau một từ tiếng Anh thì là tiếng Anh.</td></tr>
+          <tr data-keys="carm own"><td></td><td></td><td></td><td><code>own</code> đứng sau một từ tiếng Việt thì là <code>ơn</code>.</td></tr>
+          <tr data-keys="arm64"><td></td><td></td><td></td><td>Chữ dính liền với chữ số là tên, không phải tiếng Việt.</td></tr>
+          <tr data-keys="my_var"><td></td><td></td><td></td><td>Từ dính liền ký tự của code giữ nguyên.</td></tr>
+        </tbody>
+      </table>
+
+      <ol class="layers">
+        <li>
+          <h3>Phải là âm tiết tiếng Việt</h3>
+          <p>Chữ sau khi đặt dấu chỉ được giữ nếu khớp một âm tiết trong danh sách lấy từ Viet74K và hunspell-vi. <code>doé</code> không có trong danh sách, nên <code>does</code> giữ nguyên.</p>
+        </li>
+        <li>
+          <h3>Từ có trong danh sách tiếng Anh</h3>
+          <p>Ankey có danh sách các từ tiếng Anh mà Telex sẽ đặt dấu, xếp theo mức phổ biến của dạng có dấu trong tiếng Việt. <code>cos</code> và <code>nos</code> vẫn ra <code>có</code> và <code>nó</code>. <code>reset</code>, <code>boot</code> và <code>list</code> luôn giữ nguyên.</p>
+        </li>
+        <li>
+          <h3>Từ đứng trước</h3>
+          <p>Với từ có thể là cả hai thứ tiếng, Ankey nhìn từ vừa gõ trước đó. Ngữ cảnh được xoá khi gặp dấu chấm, <code>!</code>, <code>?</code>, Return, khi chuyển ứng dụng hoặc khi con trỏ nhảy chỗ khác.</p>
+        </li>
+        <li>
+          <h3>Bạn sửa thì Ankey nhớ</h3>
+          <p>Xoá cả từ rồi gõ lại y hệt, Ankey hiểu là nó đoán sai và nhớ lựa chọn đó. Điều này chỉ áp dụng cho từ có trong danh sách tiếng Anh và dài từ ba chữ cái. Các từ đã học nằm ở tab Chung trong Cài đặt, xoá là Ankey quên.</p>
+        </li>
+      </ol>
+    </section>
+
+    <section class="wrap block split" aria-labelledby="goi-y">
+      <div>
+        <h2 id="goi-y">Gợi ý cụm từ</h2>
+        <p>Sau một từ trở lên, nếu các từ vừa gõ gần như luôn được theo sau bởi cùng một chuỗi âm tiết, Ankey hiện chuỗi đó ngay sau con trỏ. Bấm Tab để nhận. Bấm Esc hoặc Backspace để tắt gợi ý.</p>
+        <p>Danh sách gợi ý đếm từ khoảng 100 triệu từ tiếng Việt thật: phụ đề OpenSubtitles và văn bản web CCMatrix. Trên văn bản giữ riêng chưa dùng để đếm, gợi ý đúng 97 đến 98%, và hiện ở khoảng 2 đến 4% số từ gõ.</p>
+        <p class="fine">Ứng dụng đặt ở chế độ chèn trực tiếp không có gợi ý. Tắt tính năng ở Cài đặt, mục Gợi ý cụm từ.</p>
+      </div>
+      <figure class="mock" aria-label="Ví dụ gợi ý: gõ cuộc chiến thương, Ankey gợi ý mại">
+        <p class="mock-line"><span class="typed">cuộc chiến thương</span><span class="ghost">mại</span></p>
+        <figcaption class="mock-cap"><kbd>Tab</kbd> để nhận <kbd>Esc</kbd> để bỏ</figcaption>
+      </figure>
+    </section>
+
+    <section class="wrap block split" aria-labelledby="hoc">
+      <div>
+        <h2 id="hoc">Học theo cách bạn gõ</h2>
+        <p>Danh sách chung không có tên dự án hay thuật ngữ của riêng bạn. Ankey có hai chế độ học: cụm từ bạn hay gõ, và khi nào bạn gõ tiếng Anh. Cả hai tắt mặc định, vì chúng giữ lại chữ bạn gõ.</p>
+        <p>Dữ liệu học nằm trong file chỉ bạn đọc được trên máy này và không gửi đi đâu. Xem và xoá từng mục, hoặc xoá hết, ngay trong Cài đặt.</p>
+      </div>
+      <div>
+        <h2 class="h3" id="rieng-tung-app">Riêng từng ứng dụng</h2>
+        <p>Mỗi ứng dụng có thể chạy ở một trong ba chế độ: tắt, gạch chân hoặc chèn trực tiếp. Chọn chế độ nào hợp với terminal, trình soạn code hay trình duyệt của bạn, thay vì một chế độ cho tất cả.</p>
+      </div>
+    </section>
+  </main>
+
+  <section class="setup" id="cai-dat" aria-labelledby="cai-dat-h">
+    <div class="wrap">
+      <h2 id="cai-dat-h">Cài đặt</h2>
+
+      <div class="tour" data-tour>
+        <ol class="tour-steps">
+          <li>
+            <button class="tour-step" type="button" data-step="0">
+              <span class="tour-title"><span class="tour-num">1</span><span>Chạy lệnh trong Terminal</span></span>
+              <span class="tour-text">Lệnh tải bản mới nhất, kiểm tra SHA-256 và chữ ký Developer ID, rồi mới chép vào <code>~/Library/Input Methods</code>.</span>
+              <span class="tour-bar" aria-hidden="true"></span>
+            </button>
+            <div class="install">
+              <code class="cmd" id="cmd-setup">curl -fsSL https://raw.githubusercontent.com/nguyenvanduocit/ankey/main/install.sh | sh</code>
+              <button class="btn" type="button" data-copy="#cmd-setup">Sao chép lệnh cài</button>
+            </div>
+          </li>
+          <li>
+            <button class="tour-step" type="button" data-step="1">
+              <span class="tour-title"><span class="tour-num">2</span><span>Đăng xuất rồi đăng nhập lại</span></span>
+              <span class="tour-text">macOS chỉ hiện bộ gõ mới trong System Settings sau khi bạn đăng nhập lại.</span>
+              <span class="tour-bar" aria-hidden="true"></span>
+            </button>
+          </li>
+          <li>
+            <button class="tour-step" type="button" data-step="2">
+              <span class="tour-title"><span class="tour-num">3</span><span>Thêm Ankey vào bộ gõ</span></span>
+              <span class="tour-text">Mở System Settings, vào Keyboard, Input Sources, bấm Edit, bấm <kbd>+</kbd>, chọn Vietnamese rồi chọn <strong>Ankey</strong>.</span>
+              <span class="tour-bar" aria-hidden="true"></span>
+            </button>
+          </li>
+          <li>
+            <button class="tour-step" type="button" data-step="3">
+              <span class="tour-title"><span class="tour-num">4</span><span>Chọn Ankey ở menu bộ gõ</span></span>
+              <span class="tour-text">Bấm biểu tượng bộ gõ trên thanh menu, chọn Ankey rồi gõ thử trong bất kỳ ô nhập nào.</span>
+              <span class="tour-bar" aria-hidden="true"></span>
+            </button>
+          </li>
+        </ol>
+
+        <div class="tour-view">
+          <div class="screen" data-screen role="img" aria-label="Minh hoạ các bước cài đặt Ankey. Nội dung từng bước nằm trong danh sách bên cạnh.">
+            <div class="scene" data-scene="terminal">
+              <div class="win term">
+                <div class="win-bar"><span class="dots"><i></i><i></i><i></i></span><b>Terminal</b></div>
+                <div class="term-body">
+                  <p><span class="ps">$ </span><span id="t-cmd" data-type="curl -fsSL https://raw.githubusercontent.com/nguyenvanduocit/ankey/main/install.sh | sh"></span><span class="caret"></span></p>
+                  <p class="toggle" id="t-l1">Downloading Ankey <span data-ver>1.9.0</span></p>
+                  <p class="toggle" id="t-l2">Installed /Users/ban/Library/Input Methods/Ankey.app</p>
+                  <p class="toggle next" id="t-l3">Next steps:<br>1. Log out and back in.<br>2. System Settings -&gt; Keyboard -&gt; Input Sources -&gt; Edit... -&gt; + -&gt; Vietnamese -&gt; Ankey.<br>3. Switch to Ankey from the input-source menu in the menu bar.</p>
+                </div>
+              </div>
+            </div>
+
+            <div class="scene" data-scene="logout">
+              <div class="menubar">
+                <svg id="l-apple" class="apple" viewBox="0 0 14 17" width="14" height="17" aria-hidden="true"><path fill="currentColor" d="M9.1 0c.1 1.2-.4 2.300-1.100 3-.7.800-1.800 1.300-2.800 1.200-.1-1.100.5-2.300 1.100-3C7 .5 8.200 0 9.100 0zm3.800 11.600c-.5 1.200-1.500 3.300-2.700 3.300-.8 0-1.100-.5-2.200-.5s-1.400.5-2.200.5C4.300 15 2.700 12.700 1.900 10.300c-.9-2.800-.4-5.700 1.200-6.700.9-.6 1.900-.6 2.600-.6.9 0 1.500.5 2.200.5.700 0 1.200-.5 2.300-.5.8 0 1.800.3 2.500 1.200-2.200 1.300-1.900 4.600.4 5.600-.2.700-.4 1.100-.2.800z"/></svg>
+                <b>Finder</b><span>File</span><span>Edit</span><span>View</span>
+                <em>21:12</em>
+              </div>
+              <ul class="dropdown toggle" id="l-menu">
+                <li>About This Mac</li><li>System Settings…</li><li class="sep"></li><li>Sleep</li><li>Restart…</li><li>Shut Down…</li><li class="sep"></li><li>Lock Screen</li><li class="row" id="l-logout">Log Out…</li>
+              </ul>
+              <div class="login toggle" id="l-login">
+                <span class="avatar"></span>
+                <p>Đăng nhập lại</p>
+                <span class="field"><span id="l-pass" data-type="••••••••"></span></span>
+              </div>
+            </div>
+
+            <div class="scene" data-scene="settings">
+              <div class="win settings">
+                <div class="win-bar"><span class="dots"><i></i><i></i><i></i></span><b>System Settings</b></div>
+                <div class="set-body">
+                  <ul class="side"><li>Wi-Fi</li><li>Bluetooth</li><li>Sound</li><li class="cur">Keyboard</li><li>Trackpad</li></ul>
+                  <div class="set-main">
+                    <h4>Keyboard</h4>
+                    <div class="set-row"><span>Key repeat rate</span><i class="slider"></i></div>
+                    <div class="set-row"><span>Input Sources</span><button type="button" tabindex="-1" class="mbtn row" id="s-edit">Edit…</button></div>
+                  </div>
+                </div>
+                <div class="sheet toggle" id="s-sheet">
+                  <div class="sheet-list"><p>ABC</p><p class="toggle" id="s-row">Ankey</p></div>
+                  <div class="sheet-foot"><button type="button" tabindex="-1" class="mbtn row" id="s-plus">+</button><button type="button" tabindex="-1" class="mbtn">Done</button></div>
+                </div>
+                <div class="picker toggle" id="s-picker">
+                  <div class="picker-lists">
+                    <ul><li>English</li><li>French</li><li class="row" id="s-vn">Vietnamese</li><li>Chinese</li></ul>
+                    <ul class="toggle" id="s-srcs"><li>Telex</li><li>VNI</li><li>Simple Telex</li><li class="row" id="s-ankey">Ankey</li></ul>
+                  </div>
+                  <div class="sheet-foot"><button type="button" tabindex="-1" class="mbtn">Cancel</button><button type="button" tabindex="-1" class="mbtn row" id="s-add">Add</button></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="scene" data-scene="menu">
+              <div class="menubar">
+                <span class="spacer"></span>
+                <span class="mb-input" id="m-label"><span class="lab">ABC</span><img src="/icon.png" alt="" width="14" height="14"></span>
+                <em>21:12</em>
+              </div>
+              <ul class="dropdown right toggle" id="m-menu">
+                <li class="checked">ABC</li><li class="row" id="m-ankey">Ankey</li><li class="sep"></li><li>Show Keyboard Viewer</li>
+              </ul>
+              <div class="win note">
+                <div class="win-bar"><span class="dots"><i></i><i></i><i></i></span><b>Notes</b></div>
+                <p class="note-body" id="m-field"><span id="m-text" data-keys="Xin chaof, vui quas."></span><span class="caret"></span></p>
+              </div>
+            </div>
+
+            <div class="pointer" data-pointer aria-hidden="true">
+              <span class="ripple"></span>
+              <svg viewBox="0 0 14 21" width="17" height="25"><path d="M1.500 1.200v15.400l3.800-3.500 2.700 6.200 2.700-1.200-2.700-6h5.200z" fill="#fff" stroke="#0a0b1a" stroke-width="1.300" stroke-linejoin="round"/></svg>
+            </div>
+          </div>
+          <button class="tour-pause" type="button" data-tour-pause aria-pressed="false">Tạm dừng</button>
+        </div>
+      </div>
+
+      <p class="fine">Lần đầu mở, Ankey hiện cửa sổ Hướng dẫn gồm ba bước: bật Ankey, gõ thử và các mẹo. Sau đó menu bộ gõ có mục Trợ giúp.</p>
+    </div>
+  </section>
+
+  <footer class="foot wrap">
+    <p><a href="https://github.com/nguyenvanduocit/ankey">Mã nguồn trên GitHub</a></p>
+    <p><a href="https://github.com/nguyenvanduocit/ankey/releases">Các bản phát hành</a></p>
+    <p><a href="https://github.com/nguyenvanduocit/ankey/issues">Báo lỗi hoặc góp ý</a></p>
+  </footer>
+</body>
+</html>
