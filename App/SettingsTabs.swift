@@ -50,49 +50,6 @@ struct WordRow: View {
     }
 }
 
-struct ShorthandTab: View {
-    @ObservedObject var model: SettingsModel
-    @State private var newWord = ""
-
-    var body: some View {
-        PixelPage {
-            PixelSection(title: "Từ viết tắt") {
-                PixelToggle(
-                    title: "Cho phép từ viết tắt",
-                    detail: "Những từ dưới đây được ghép dấu dù không phải âm tiết tiếng Việt. Cần bật mục giữ nguyên chữ ở tab Chung.",
-                    isOn: $model.value.abbreviation
-                )
-                ForEach(model.value.shorthand, id: \.self) { word in
-                    WordRow(word: word) {
-                        model.value.shorthand.removeAll { $0 == word }
-                    }
-                }
-                HStack(spacing: 2 * Pixel.unit) {
-                    TextField("Từ mới", text: $newWord, prompt: Text("Từ mới, ví dụ đt"))
-                        .labelsHidden()
-                        .pixelField()
-                        .onSubmit(addWord)
-                    Button("Thêm", action: addWord)
-                        .buttonStyle(PixelButtonStyle())
-                        .disabled(normalizedNewWord.isEmpty)
-                }
-            }
-            .disabled(!model.value.restoreRaw)
-        }
-    }
-
-    private var normalizedNewWord: String {
-        newWord.trimmingCharacters(in: .whitespaces).lowercased()
-    }
-
-    private func addWord() {
-        let word = normalizedNewWord
-        guard !word.isEmpty, !model.value.shorthand.contains(word) else { return }
-        model.value.shorthand.append(word)
-        newWord = ""
-    }
-}
-
 struct AppsTab: View {
     @ObservedObject var model: SettingsModel
     @State private var showPicker = false

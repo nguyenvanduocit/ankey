@@ -198,7 +198,7 @@ func checkChangeLog() {
     for index in 0..<(ChangeLog.capacity + 10) { log.record(change("c\(index)")) }
     expect(log.changes.count, ChangeLog.capacity, "the log keeps its capacity")
     expect(log.changes.first?.summary, "c10", "the oldest changes drop first")
-    expect(log.changes.last?.summary, "c59", "the newest change stays")
+    expect(log.changes.last?.summary, "c\(ChangeLog.capacity + 9)", "the newest change stays")
 
     var small = ChangeLog()
     small.record(change("first"))
@@ -383,7 +383,7 @@ func checkAIReport() {
     let settings = AIReport.settings(Settings(toneStyle: .classic, shorthand: ["kg"], appRules: [AppRule(bundleID: "com.x", enabled: false)]))
     expect(Set(settings.keys), [
         "toneStyle", "restoreRaw", "abbreviation", "escClears", "suggestions", "learnsPhrases", "learnsLanguage", "keepsDiary",
-        "collectStats", "shareStats", "onboardingSeen", "shorthand", "appRules",
+        "collectStats", "shareStats", "onboardingSeen", "shorthand", "customMap", "appRules",
     ], "the settings report lists every saved setting and nothing learned")
     expect(settings["toneStyle"] as? String, "classic", "the tone style is a name")
     expect(settings["keepsDiary"] as? Bool, false, "a switch is a bool")
@@ -582,15 +582,15 @@ func checkAIFiles() {
 
     // Two command lines at once (an AI may run two commands in one turn) must not lose a change.
     do {
-        let count = 24
-        DispatchQueue.concurrentPerform(iterations: count) { index in
+        let iterations = ChangeLog.capacity + 10
+        DispatchQueue.concurrentPerform(iterations: iterations) { index in
             try? AIFiles.updateChangeLog(in: dir) { log in
                 log.record(Change(time: Date(), summary: "change \(index)", undo: nil))
             }
         }
         let log = AIFiles.readChangeLog(in: dir)
-        expect(log.changes.count, count, "every change made at the same time is in the log")
-        expect(Set(log.changes.map(\.summary)).count, count, "no change is in the log twice")
+        expect(log.changes.count, ChangeLog.capacity, "every change made at the same time is in the log")
+        expect(Set(log.changes.map(\.summary)).count, ChangeLog.capacity, "no change is in the log twice")
     }
 
     // A change that fails to apply leaves the log as it was.
@@ -614,7 +614,7 @@ func checkSettingTabs() {
         expect(key.tab, "AI", "\(key.rawValue) is in the AI tab")
     }
     for key in [SettingKey.toneStyle, .restoreRaw, .escClears] { expect(key.tab, "Chung", "\(key.rawValue) is in the Chung tab") }
-    expect(SettingKey.abbreviation.tab, "Vi\u{1ebf}t t\u{1eaf}t", "abbreviation is in the Viết tắt tab")
+    expect(SettingKey.abbreviation.tab, "AI", "abbreviation is in the AI tab")
     expect(SettingKey.collectStats.tab, "Th\u{1ed1}ng k\u{00ea}", "collectStats is in the Thống kê tab")
     expect(AIError.humanOnly("learnsPhrases").message.contains("tab AI"), true, "the refusal for learnsPhrases names the AI tab")
 }

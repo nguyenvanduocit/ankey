@@ -353,12 +353,15 @@ enum Engine {
     static func analyze(
         _ raw: String, _ settings: Settings, after previous: Language?, habit: Language? = nil, glued: Bool = false
     ) -> Verdict {
+        let word = raw.lowercased()
+        if let mapped = settings.customMap[word] {
+            return Verdict(text: mapped, language: .vietnamese)
+        }
         let (atoms, tone, out, literal) = telex(raw, settings)
         let language: Language? = out == literal ? nil : .vietnamese
         guard settings.restoreRaw else { return Verdict(text: out, language: language) }
         if glued { return Verdict(text: literal, language: .english) }
         if let undone = toneUndo(raw, settings, after: previous) { return Verdict(text: undone, language: .english) }
-        let word = raw.lowercased()
         // How English the word looks: its built-in band, one more right after an English word, plus what Ankey
         // learned from corrections. The syllable check runs only for the few words the lists know.
         let band = English.band[word]

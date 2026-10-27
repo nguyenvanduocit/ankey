@@ -18,12 +18,11 @@ final class SettingsModel: ObservableObject {
 }
 
 enum SettingsTab: CaseIterable {
-    case general, shorthand, apps, ai, stats, updates
+    case general, apps, ai, stats, updates
 
     var title: String {
         switch self {
         case .general: return "Chung"
-        case .shorthand: return "Viết tắt"
         case .apps: return "Ứng dụng"
         case .ai: return "AI"
         case .stats: return "Thống kê"
@@ -52,7 +51,6 @@ struct SettingsView: View {
 
             switch model.tab {
             case .general: GeneralTab(model: model)
-            case .shorthand: ShorthandTab(model: model)
             case .apps: AppsTab(model: model)
             case .ai: AITab(model: model)
             case .stats: StatsTab(model: model)

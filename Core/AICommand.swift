@@ -24,7 +24,7 @@ enum AICommand: Equatable {
     static let defaultLimit = 200
     static let limits = 1...2000
 
-    private static let verbs: Set<String> = ["guide", "skill", "help", "show", "set", "shorthand", "app", "learned", "diary", "undo"]
+    private static let verbs: Set<String> = ["guide", "skill", "help", "show", "set", "shorthand", "app", "learned", "diary", "undo", "custom-map"]
 
     /// Whether the first argument is a command, so the process is the command line and not the input method.
     static func isVerb(_ argument: String?) -> Bool {
@@ -44,6 +44,8 @@ enum AICommand: Equatable {
           learned forget-phrase <prefix> <word>
           learned forget-habit <word>
           diary clear
+          custom-map add <sequence> <word> [--dry-run]
+          custom-map remove <sequence> [--dry-run]
           undo
           skill                                          a SKILL.md for Claude Code
           help
@@ -94,6 +96,11 @@ enum AICommand: Equatable {
             if words.count == 2, words[0] == "remove" { return editing(ConfigEdit(kind: .appRuleRemove, key: words[1]), usage: text) }
             return failure(text)
         case "learned": return learned(words, operands)
+        case "custom-map":
+            let text = "Usage: Ankey custom-map add <sequence> <word> [--dry-run] | Ankey custom-map remove <sequence> [--dry-run]"
+            if words.count == 3, words[0] == "add" { return editing(ConfigEdit(kind: .customMapAdd, key: words[1], value: words[2]), usage: text) }
+            if words.count == 2, words[0] == "remove" { return editing(ConfigEdit(kind: .customMapRemove, key: words[1]), usage: text) }
+            return failure(text)
         case "diary":
             return words == ["clear"] && !operands.dryRun && operands.limit == nil ? .success(.gateway(.diaryClear)) : failure("Usage: Ankey diary clear")
         default:

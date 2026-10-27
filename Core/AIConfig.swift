@@ -21,7 +21,7 @@ enum SettingKey: String, CaseIterable {
     var tab: String {
         switch self {
         case .toneStyle, .restoreRaw, .escClears: return "Chung"
-        case .abbreviation: return "Vi\u{1ebf}t t\u{1eaf}t"
+        case .abbreviation: return "AI"
         case .collectStats, .shareStats: return "Th\u{1ed1}ng k\u{00ea}"
         case .suggestions, .learnsPhrases, .learnsLanguage, .keepsDiary: return "AI"
         }
@@ -80,7 +80,7 @@ extension AppMode {
 /// One edit to the settings. The edit that undoes it is another `ConfigEdit`, so the change log stores plain data.
 struct ConfigEdit: Codable, Equatable {
     enum Kind: String, Codable {
-        case set, shorthandAdd, shorthandRemove, appRule, appRuleRemove
+        case set, shorthandAdd, shorthandRemove, appRule, appRuleRemove, customMapAdd, customMapRemove
     }
 
     var kind: Kind
@@ -100,7 +100,7 @@ struct Change: Codable, Equatable {
 
 /// The changes made through the command line, oldest first, so the user can see them and take one back.
 struct ChangeLog: Codable, Equatable {
-    static let capacity = 50
+    static let capacity = 10
 
     private(set) var changes: [Change] = []
 
@@ -151,6 +151,7 @@ extension ConfigEdit {
         case .set: return try applyingSet(to: settings, now: now)
         case .shorthandAdd, .shorthandRemove: return try applyingShorthand(to: settings, now: now)
         case .appRule, .appRuleRemove: return try applyingAppRule(to: settings, now: now)
+        case .customMapAdd, .customMapRemove: return try applyingCustomMap(to: settings, now: now)
         }
     }
 
@@ -188,6 +189,26 @@ extension ConfigEdit {
         next.shorthand.remove(at: index)
         let undo = ConfigEdit(kind: .shorthandAdd, key: word)
         return (next, Change(time: now, summary: "shorthand: removed \"\(word)\"", undo: undo))
+    }
+
+    private func applyingCustomMap(to settings: Settings, now: Date) throws -> (settings: Settings, change: Change?) {
+        let sequence = key.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !sequence.isEmpty else { throw AIError.emptyValue }
+        guard sequence.allSatisfy({ $0.isASCII && $0.isLetter }) else {
+            throw AIError.failed("A custom map sequence must be ASCII letters only, no spaces.")
+        }
+        var next = settings
+        if kind == .customMapAdd {
+            let word = (value ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !word.isEmpty else { throw AIError.emptyValue }
+            guard next.customMap[sequence] != word else { return (settings, nil) }
+            next.customMap[sequence] = word
+            let undo = ConfigEdit(kind: .customMapRemove, key: sequence)
+            return (next, Change(time: now, summary: "custom-map: \"\(sequence)\" \u{2192} \"\(word)\"", undo: undo))
+        }
+        guard let old = next.customMap.removeValue(forKey: sequence) else { return (settings, nil) }
+        let undo = ConfigEdit(kind: .customMapAdd, key: sequence, value: old)
+        return (next, Change(time: now, summary: "custom-map: removed \"\(sequence)\"", undo: undo))
     }
 
     private func applyingAppRule(to settings: Settings, now: Date) throws -> (settings: Settings, change: Change?) {

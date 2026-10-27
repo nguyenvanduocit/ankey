@@ -17,6 +17,7 @@ enum AIReport {
             "shareStats": settings.shareStats,
             "onboardingSeen": settings.onboardingSeen,
             "shorthand": settings.shorthand,
+            "customMap": settings.customMap.sorted { $0.key < $1.key }.map { ["sequence": $0.key, "word": $0.value] as [String: Any] },
             "appRules": settings.appRules.map { ["bundleID": $0.bundleID, "mode": $0.mode.name] },
         ]
     }

@@ -1,22 +1,20 @@
 import Cocoa
 import SwiftUI
 
-/// How the user's AI reaches Ankey, the diary switch, and what the AI changed with the command line.
 struct AITab: View {
     @ObservedObject var model: SettingsModel
     @State private var changes: [Change] = []
     @State private var copied = false
+    @State private var newWord = ""
 
     private var executable: String { Bundle.main.executablePath ?? "Ankey" }
-
-    /// What the user pastes into their AI. The guide is served by the installed app, so it matches this version.
     private var prompt: String { AIPrompt.text(executable: executable) }
 
     var body: some View {
         PixelPage {
             PixelSection(
                 title: "Kết nối AI",
-                footer: "Dán lời nhắc vào AI chạy được lệnh shell (Claude Code, Codex, Cursor…), hoặc gõ ///ai vào ô chat của AI để Ankey điền lời nhắc tại chỗ. AI chạy Ankey guide để biết các lệnh, đọc cài đặt, những gì Ankey đã học và số đếm, rồi đề nghị thay đổi cho bạn duyệt. Mọi thứ nằm trên máy này. AI chỉ được tắt, không bao giờ được bật các mục lưu chữ bạn gõ."
+                footer: "Dán lời nhắc vào AI (Claude Code, Codex, Cursor…) hoặc gõ ///ai để Ankey điền tại chỗ. AI chỉ được tắt, không bao giờ được bật lưu chữ."
             ) {
                 Button(copied ? "Đã sao chép" : "Sao chép lời nhắc", action: copyPrompt)
                     .buttonStyle(PixelButtonStyle(primary: true))
@@ -25,8 +23,47 @@ struct AITab: View {
             LearnedSections(model: model)
 
             PixelSection(
+                title: "Từ viết tắt",
+                footer: !model.value.restoreRaw ? "Cần bật \u{201c}Giữ nguyên chữ không phải tiếng Việt\u{201d} ở tab Chung." : nil
+            ) {
+                PixelToggle(
+                    title: "Cho phép từ viết tắt",
+                    detail: "Những từ dưới đây được ghép dấu dù không phải âm tiết tiếng Việt.",
+                    isOn: $model.value.abbreviation
+                )
+                ForEach(model.value.shorthand, id: \.self) { word in
+                    WordRow(word: word) {
+                        model.value.shorthand.removeAll { $0 == word }
+                    }
+                }
+                HStack(spacing: 2 * Pixel.unit) {
+                    TextField("Từ mới", text: $newWord, prompt: Text("Từ mới, ví dụ đt"))
+                        .labelsHidden()
+                        .pixelField()
+                        .onSubmit(addWord)
+                    Button("Thêm", action: addWord)
+                        .buttonStyle(PixelButtonStyle())
+                        .disabled(normalizedNewWord.isEmpty)
+                }
+            }
+            .disabled(!model.value.restoreRaw)
+
+            if !model.value.customMap.isEmpty {
+                PixelSection(
+                    title: "Bộ gõ tắt",
+                    footer: "Gõ chuỗi này, Ankey trả về từ đặt sẵn thay vì qua Telex. Thêm bằng: ankey custom-map add <chuỗi> <từ>."
+                ) {
+                    ForEach(model.value.customMap.sorted { $0.key < $1.key }, id: \.key) { pair in
+                        WordRow(word: "\(pair.key) → \(pair.value)") {
+                            model.value.customMap.removeValue(forKey: pair.key)
+                        }
+                    }
+                }
+            }
+
+            PixelSection(
                 title: "Nhật ký",
-                footer: "Tắt mặc định vì nó lưu chữ bạn gõ và tên ứng dụng: phím đã gõ và chữ Ankey đã hiện cho mỗi từ bạn lấy lại (Esc, Shift+Esc, xoá rồi gõ lại), cùng số từ gõ trong mỗi ứng dụng. Chỉ nằm trong một file chỉ bạn đọc được trên máy này, tối đa 2.000 mục trong 30 ngày, không gửi đi và không nằm trong thống kê. Tắt là xoá hết."
+                footer: "Lưu phím gõ và chữ Ankey hiện cho mỗi từ lấy lại, cùng số từ theo ứng dụng. Chỉ trên máy này, tối đa 2.000 mục. Tắt là xoá hết."
             ) {
                 PixelToggle(
                     title: "Ghi nhật ký những từ bạn lấy lại",
@@ -41,12 +78,12 @@ struct AITab: View {
 
             PixelSection(
                 title: "AI đã chỉnh",
-                footer: "Những thay đổi AI làm bằng dòng lệnh. Hoàn tác trả lại giá trị cũ của thay đổi mới nhất làm được."
+                footer: "Những thay đổi AI làm bằng dòng lệnh. Hoàn tác trả lại giá trị cũ của thay đổi mới nhất."
             ) {
                 if changes.isEmpty {
                     Text("Chưa có thay đổi nào.").foregroundStyle(Pixel.muted)
                 } else {
-                    ForEach(Array(changes.prefix(5).enumerated()), id: \.offset) { _, change in
+                    ForEach(Array(changes.enumerated()), id: \.offset) { _, change in
                         VStack(alignment: .leading, spacing: Pixel.unit) {
                             Text(change.summary)
                             Text(ago(change.time)).font(Pixel.font(15)).foregroundStyle(Pixel.muted)
@@ -59,11 +96,21 @@ struct AITab: View {
             }
         }
         .onAppear(perform: refresh)
-        // The window is built once and shown again, and the command line writes the log from another process.
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { _ in refresh() }
         .onChange(of: model.value.keepsDiary) { isOn in
             if !isOn { DiaryStore.shared.forgetAll() }
         }
+    }
+
+    private var normalizedNewWord: String {
+        newWord.trimmingCharacters(in: .whitespaces).lowercased()
+    }
+
+    private func addWord() {
+        let word = normalizedNewWord
+        guard !word.isEmpty, !model.value.shorthand.contains(word) else { return }
+        model.value.shorthand.append(word)
+        newWord = ""
     }
 
     private func refresh() {
@@ -80,7 +127,6 @@ struct AITab: View {
         }
     }
 
-    /// Takes the newest change that can be undone, with the same rules as `Ankey undo`.
     private func undo() {
         let settings = model.value
         guard let next = try? AIFiles.updateChangeLog({ (log: inout ChangeLog) throws -> Settings in

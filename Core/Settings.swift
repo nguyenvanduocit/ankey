@@ -88,6 +88,9 @@ struct Settings: Equatable {
     /// typed (on this Mac only, never sent).
     var keepsDiary = false
     var shorthand = ["\u{0111}c"]
+    /// Sequences the Telex engine never recognises that the user always means as a specific Vietnamese word.
+    /// Matched at word commit before Telex runs. Stored as `[sequence: word]`, keys are ASCII-letter lowercase.
+    var customMap: [String: String] = [:]
     /// What Ankey learned from corrections: a score per word, added to its built-in band. Typed keys,
     /// lowercase. `Settings.load` fills it from the `AdjustStore`, and `save` never writes it.
     var adjust: [String: Int] = [:]
@@ -114,6 +117,7 @@ extension Settings {
         static let learnsLanguage = "learnsLanguage"
         static let keepsDiary = "keepsDiary"
         static let shorthand = "shorthand"
+        static let customMap = "customMap"
         static let appRules = "appRules"
         static let excludedApps = "excludedApps"
         static let collectStats = "collectStats"
@@ -161,6 +165,10 @@ extension Settings {
         if let words = defaults.stringArray(forKey: Key.shorthand) {
             settings.shorthand = uniqueTrimmed(words, lowercased: true)
         }
+        if let raw = defaults.dictionary(forKey: Key.customMap) {
+            settings.customMap = raw.compactMapValues { $0 as? String }
+                .filter { !$0.key.isEmpty && !$0.value.isEmpty }
+        }
         if let rows = defaults.array(forKey: Key.appRules) as? [[String: Any]] {
             settings.appRules = AppRule.cleaned(rows.compactMap(AppRule.init(stored:)))
         } else if let apps = defaults.stringArray(forKey: Key.excludedApps) {
@@ -194,6 +202,7 @@ extension Settings {
         }
         put(\.onboardingSeen, Key.onboardingSeen)
         put(\.shorthand, Key.shorthand)
+        put(\.customMap, Key.customMap)
         put(\.appRules, Key.appRules) { $0.map(\.stored) }
         defaults.removeObject(forKey: Key.excludedApps)
     }
