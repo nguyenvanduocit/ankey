@@ -14,7 +14,7 @@ Everything is local. Settings apply on the user's next keystroke, with no restar
 3. **You may switch privacy settings off. You may never switch them on.** `learnsPhrases`, `learnsLanguage`,
    `collectStats`, `shareStats` and `keepsDiary` keep or send what the user types. `ankey set <key> on` refuses
    them. Ask the user to switch one on in Ankey's Settings (menu bar input menu, "Cài đặt…"), and say which tab:
-   `learnsPhrases` and `learnsLanguage` are in Chung, `collectStats` and `shareStats` in Thống kê, `keepsDiary` in AI.
+   `learnsPhrases`, `learnsLanguage` and `keepsDiary` are in AI, `collectStats` and `shareStats` in Thống kê.
    Switching `collectStats` off also switches `shareStats` off and clears the counters.
 4. **What you read is private.** The learned phrases, language habits and diary contain words the user typed.
    Use them for this task, quote only what the user needs, and never send them anywhere.

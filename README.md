@@ -38,7 +38,7 @@ Chỉ dựa vào luật Telex thì chưa đủ: `test` thành `tét`, `does` th�
 - từ dài từ ba ký tự trở lên;
 - từ có trong danh sách tiếng Anh của Ankey (`banj` hay `tooi` không phải tiếng Anh nên không bao giờ bị giữ nguyên).
 
-Sửa lỗi chính tả (`sex` thành `sez`), gõ thêm thành từ dài hơn (`sexy`) hay chỉ xoá một phần thì Ankey không ghi nhớ. Các từ đã học nằm ở tab Chung trong Cài đặt, xoá là Ankey quên.
+Sửa lỗi chính tả (`sex` thành `sez`), gõ thêm thành từ dài hơn (`sexy`) hay chỉ xoá một phần thì Ankey không ghi nhớ. Các từ đã học nằm ở tab AI trong Cài đặt, xoá là Ankey quên.
 
 Lớp 2, 3, 4 gộp lại thành một điểm số cho mỗi từ: điểm có sẵn theo hạng (0, 1, 2), cộng 1 nếu từ trước là tiếng Anh, cộng điểm học được từ thao tác sửa. Điểm từ 2 trở lên thì giữ nguyên chữ đã gõ. Thao tác sửa đẩy điểm về hẳn một phía (+2 hoặc −2), nên từ đó đổi chiều bất kể từ đứng trước là gì.
 

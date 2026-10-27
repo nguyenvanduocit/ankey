@@ -20,10 +20,10 @@ enum SettingKey: String, CaseIterable {
     /// The Settings tab where the user finds the switch.
     var tab: String {
         switch self {
-        case .toneStyle, .restoreRaw, .escClears, .suggestions, .learnsPhrases, .learnsLanguage: return "Chung"
+        case .toneStyle, .restoreRaw, .escClears: return "Chung"
         case .abbreviation: return "Vi\u{1ebf}t t\u{1eaf}t"
         case .collectStats, .shareStats: return "Th\u{1ed1}ng k\u{00ea}"
-        case .keepsDiary: return "AI"
+        case .suggestions, .learnsPhrases, .learnsLanguage, .keepsDiary: return "AI"
         }
     }
 

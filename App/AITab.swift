@@ -24,6 +24,8 @@ struct AITab: View {
                     .buttonStyle(PixelButtonStyle(primary: true))
             }
 
+            LearnedSections(model: model)
+
             PixelSection(
                 title: "Nhật ký",
                 footer: "Tắt mặc định vì nó lưu chữ bạn gõ và tên ứng dụng: phím đã gõ và chữ Ankey đã hiện cho mỗi từ bạn lấy lại (Esc, Shift+Esc, xoá rồi gõ lại), cùng số từ gõ trong mỗi ứng dụng. Chỉ nằm trong một file chỉ bạn đọc được trên máy này, tối đa 2.000 mục trong 30 ngày, không gửi đi và không nằm trong thống kê. Tắt là xoá hết."

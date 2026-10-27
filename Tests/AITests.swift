@@ -604,3 +604,17 @@ func checkAIFiles() {
         expect(AIFiles.readChangeLog(in: dir), before, "a failed update leaves the log alone")
     }
 }
+
+// MARK: Where the user finds a setting
+
+func checkSettingTabs() {
+    // The learning and suggestion switches live in the AI tab, with what they learned, and a refusal tells an AI
+    // which tab to send the user to.
+    for key in [SettingKey.suggestions, .learnsPhrases, .learnsLanguage, .keepsDiary] {
+        expect(key.tab, "AI", "\(key.rawValue) is in the AI tab")
+    }
+    for key in [SettingKey.toneStyle, .restoreRaw, .escClears] { expect(key.tab, "Chung", "\(key.rawValue) is in the Chung tab") }
+    expect(SettingKey.abbreviation.tab, "Vi\u{1ebf}t t\u{1eaf}t", "abbreviation is in the Viết tắt tab")
+    expect(SettingKey.collectStats.tab, "Th\u{1ed1}ng k\u{00ea}", "collectStats is in the Thống kê tab")
+    expect(AIError.humanOnly("learnsPhrases").message.contains("tab AI"), true, "the refusal for learnsPhrases names the AI tab")
+}
