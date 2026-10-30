@@ -1,14 +1,15 @@
 import Foundation
 
-/// How the user's words follow each other in language: after this word they usually write English, or
-/// Vietnamese. Ankey reads it when a word could be either (`as`, `cos`), which the language of the word before
-/// it alone cannot settle: the first English word after Vietnamese text has nothing to follow, but it may
-/// follow `dùng` or `chạy` nearly every time.
+/// The words after which the user switches language: English after `dùng` or `chạy`, Vietnamese after
+/// `model`. Ankey reads it when a word could be either (`as`, `cos`), which the language of the word before
+/// it alone cannot settle: that language says the next word is the same, and the first English word after
+/// Vietnamese text has nothing to follow. A word the user follows with its own language (`tôi`, `claude`)
+/// says what Ankey assumes anyway, and a word that reads the same in both (`a`, `em`) is never learned.
 ///
 /// The table is bounded like `PersonalPhrases`. It keeps at most `maxNodes` previous words, two counts each,
 /// and past the cap drops the lowest scores a tenth at a time. A score is the count of samples (capped) times
-/// the square of how one-sided they are, halved every `halfLife` days of not being seen, so a word the user
-/// follows with both languages equally, which can never decide anything, does not keep its place.
+/// the square of the share that switched, halved every `halfLife` days of not being seen, so a word that can
+/// never decide anything does not keep its place.
 struct LanguageHabits: Codable, Equatable {
     static let maxNodes = 4000
     static let evictTo = 0.9
@@ -17,7 +18,7 @@ struct LanguageHabits: Codable, Equatable {
     /// samples and a habit that changes is relearned in tens of words.
     static let observationDecay = 0.97
     static let countCap = 50.0
-    /// The samples a word needs, and the share of them in one language, before it leans.
+    /// The samples a word needs, and the share of them in the other language, before it leans.
     static let minSamples = 7.0
     static let share = 0.9
     /// A word the user chose by hand (Esc, Shift+Esc, erase and retype) counts for this many samples. A word
@@ -25,11 +26,14 @@ struct LanguageHabits: Codable, Equatable {
     static let chosenWeight = 4.0
 
     struct Node: Codable, Equatable {
+        /// The language the word itself showed. The habit is the other one.
+        var language: Language
         var english = 0.0
         var vietnamese = 0.0
         var day: Int
 
         var total: Double { english + vietnamese }
+        var switched: Double { language == .english ? vietnamese : english }
 
         /// Counts fade the same way when the node is touched, so old habits give way to new ones.
         mutating func fade(to today: Int) {
@@ -42,8 +46,15 @@ struct LanguageHabits: Codable, Equatable {
         func score(on today: Int) -> Double {
             let total = total
             guard total > 0 else { return 0 }
-            let certainty = max(english, vietnamese) / total
+            let certainty = switched / total
             return min(total * LanguageHabits.decay(days: today - day), LanguageHabits.countCap) * certainty * certainty
+        }
+
+        /// The other language, when the user nearly always switched to it after this word.
+        func lean(on today: Int) -> Language? {
+            guard total * LanguageHabits.decay(days: today - day) >= LanguageHabits.minSamples,
+                  switched / total >= LanguageHabits.share else { return nil }
+            return language == .english ? .vietnamese : .english
         }
     }
 
@@ -74,12 +85,13 @@ struct LanguageHabits: Codable, Equatable {
 
     // MARK: - Learning
 
-    /// The user's word in `language` came right after `previous`.
-    mutating func observe(after previous: String, language: Language, weight: Double, today: Int) {
+    /// The user's word in `language` came right after `previous`, which showed `shown`.
+    mutating func observe(after previous: String, showing shown: Language, language: Language, weight: Double, today: Int) {
         let key = Suggest.key(previous)
         guard Self.learnable(key) else { return }
-        var node = nodes[key] ?? Node(day: today)
+        var node = nodes[key] ?? Node(language: shown, day: today)
         node.fade(to: today)
+        node.language = shown
         if language == .english { node.english += weight } else { node.vietnamese += weight }
         node.day = today
         nodes[key] = node
@@ -99,26 +111,17 @@ struct LanguageHabits: Codable, Equatable {
 
     // MARK: - Reading
 
-    /// The language the user nearly always writes after `previous`, or nil.
+    /// The language the user nearly always switches to after `previous`, or nil.
     func lean(after previous: String?) -> Language? {
-        guard let previous, let node = nodes[Suggest.key(previous)] else { return nil }
-        let factor = Self.decay(days: asOf - node.day)
-        let total = node.total * factor
-        guard total >= Self.minSamples else { return nil }
-        if node.english * factor / total >= Self.share { return .english }
-        if node.vietnamese * factor / total >= Self.share { return .vietnamese }
-        return nil
+        guard let previous else { return nil }
+        return nodes[Suggest.key(previous)]?.lean(on: asOf)
     }
 
     /// What the user can read and remove: the words that lean, most seen first.
     func learned(limit: Int) -> [(word: String, language: Language, samples: Int)] {
-        nodes.compactMap { word, node in
-            let factor = Self.decay(days: asOf - node.day)
-            let total = node.total * factor
-            guard total >= Self.minSamples else { return nil }
-            if node.english * factor / total >= Self.share { return (word, .english, Int(total.rounded())) }
-            if node.vietnamese * factor / total >= Self.share { return (word, .vietnamese, Int(total.rounded())) }
-            return nil
+        nodes.compactMap { word, node -> (word: String, language: Language, samples: Int)? in
+            guard let language = node.lean(on: asOf) else { return nil }
+            return (word, language, Int((node.total * Self.decay(days: asOf - node.day)).rounded()))
         }
         .sorted { $0.samples > $1.samples }
         .prefix(limit).map { $0 }

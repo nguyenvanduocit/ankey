@@ -367,7 +367,9 @@ final class AnkeyInputController: IMKInputController {
     private func noteHabit(_ ctx: Context) {
         if let flipped = session.habitFlipped { StatsStore.record(flipped == .english ? .habitToEnglish : .habitToVietnamese) }
         guard ctx.settings.learnsLanguage, ctx.rule.enabled, let observed = session.observed else { return }
-        LanguageHabitsStore.shared.observe(after: observed.previous, language: observed.language, weight: observed.weight)
+        LanguageHabitsStore.shared.observe(
+            after: observed.previous, showing: observed.previousLanguage, language: observed.language, weight: observed.weight
+        )
     }
 
     private func accept(_ text: String, _ sender: Any!) {

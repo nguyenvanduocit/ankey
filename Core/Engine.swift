@@ -37,14 +37,17 @@ struct Session {
     private(set) var learned: Correction?
     /// The last finished word and the words before it in the run, for learning phrases. Nil when it had none.
     private(set) var transition: (context: [String], word: String)?
-    /// What the last finished word says about the user's habit: the word before it, the language it showed and
-    /// how much it counts. Nil when it says nothing, because its language was in doubt.
-    private(set) var observed: (previous: String, language: Language, weight: Double)?
+    /// What the last finished word says about the user's habit: the word before it and the language that word
+    /// showed, the language it showed and how much it counts. Nil when it says nothing, because its language was
+    /// in doubt or the word before read the same in both.
+    private(set) var observed: (previous: String, previousLanguage: Language, language: Language, weight: Double)?
     /// The language a word showed because of the user's habit, when the habit changed what it showed.
     private(set) var habitFlipped: Language?
     /// The last words finished since the last break, each one ended by a space, as many as Suggest reads. A
     /// letter, a click or a backspace that reaches the app, or any other key, ends the run.
     private var phrase: [String] = []
+    /// The language the last word of `phrase` showed, nil when it read the same in both.
+    private var phraseLanguage: Language?
 
     /// Keys that join two words into one code token. Only characters that never open a phrase in
     /// prose are here: `/` (và/hoặc), brackets (`[hoàn thành]`) and `*` (bold) also appear in Vietnamese.
@@ -101,9 +104,9 @@ struct Session {
         // What the word says about the habit: a word the user chose by hand counts for more than one whose
         // language was never in doubt (not listed as English, so the score never decided it).
         let chosen = swapped || correction != nil
-        if let previousWord = phrase.last, !text.isEmpty, !isHolding, let language,
+        if let previousWord = phrase.last, let previousLanguage = phraseLanguage, !text.isEmpty, !isHolding, let language,
            chosen || (!verdict.contested && !glued && English.band[keys.lowercased()] == nil) {
-            observed = (previousWord, language, chosen ? LanguageHabits.chosenWeight : 1)
+            observed = (previousWord, previousLanguage, language, chosen ? LanguageHabits.chosenWeight : 1)
         } else {
             observed = nil
         }
@@ -113,7 +116,12 @@ struct Session {
             if without.text != verdict.text { habitFlipped = verdict.language }
         }
         transition = !text.isEmpty && !phrase.isEmpty ? (phrase, text) : nil
-        if boundary == " ", !text.isEmpty { phrase = Array((phrase + [text]).suffix(Suggest.maxWords)) } else { phrase = [] }
+        if boundary == " ", !text.isEmpty {
+            phrase = Array((phrase + [text]).suffix(Suggest.maxWords))
+            phraseLanguage = language
+        } else {
+            phrase = []
+        }
         glued = boundary.map { Self.glues($0, afterVietnamese: language == .vietnamese) } ?? false
         afterVietnamese = language == .vietnamese
         boundary = nil
@@ -136,7 +144,11 @@ struct Session {
     mutating func finishRaw() -> String {
         let text = isHolding ? held : raw
         // Esc gave the typed keys back: in this place the user wanted English.
-        observed = phrase.last.flatMap { isHolding || raw.isEmpty ? nil : ($0, .english, LanguageHabits.chosenWeight) }
+        if let previousWord = phrase.last, let previousLanguage = phraseLanguage, !isHolding, !raw.isEmpty {
+            observed = (previousWord, previousLanguage, .english, LanguageHabits.chosenWeight)
+        } else {
+            observed = nil
+        }
         habitFlipped = nil
         raw = ""
         held = ""
@@ -273,7 +285,7 @@ struct Session {
     }
 }
 
-enum Language {
+enum Language: String, Codable {
     case vietnamese
     case english
 }

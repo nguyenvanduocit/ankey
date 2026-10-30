@@ -923,25 +923,30 @@ func checkPersonalPhrases() {
 func checkLanguageHabits() {
     var habits = LanguageHabits()
     habits.asOf = 0
-    func teach(_ word: String, _ language: Language, _ times: Int, day: Int = 0) {
-        for _ in 0..<times { habits.observe(after: word, language: language, weight: 1, today: day) }
+    func teach(_ word: String, _ shown: Language, _ language: Language, _ times: Int, day: Int = 0) {
+        for _ in 0..<times { habits.observe(after: word, showing: shown, language: language, weight: 1, today: day) }
     }
     expect(habits.lean(after: "dùng"), nil, "nothing learned yet")
-    teach("dùng", .english, 7)
+    teach("dùng", .vietnamese, .english, 7)
     expect(habits.lean(after: "dùng"), nil, "seven samples are too few")
-    teach("dùng", .english, 1)
+    teach("dùng", .vietnamese, .english, 1)
     expect(habits.lean(after: "dùng"), .english, "eight one-sided samples lean")
     expect(habits.lean(after: "Dùng"), .english, "capitals compare equal")
-    teach("tôi", .vietnamese, 20)
-    expect(habits.lean(after: "tôi"), .vietnamese, "the other way")
-    teach("rồi", .vietnamese, 9)
-    teach("rồi", .english, 3)
-    expect(habits.lean(after: "rồi"), nil, "a word followed by both is not decided (75%)")
+    teach("model", .english, .vietnamese, 8)
+    expect(habits.lean(after: "model"), .vietnamese, "the other way")
+    teach("tôi", .vietnamese, .vietnamese, 20)
+    expect(habits.lean(after: "tôi"), nil, "Vietnamese after a Vietnamese word is what Ankey assumes anyway")
+    teach("claude", .english, .english, 20)
+    expect(habits.lean(after: "claude"), nil, "and English after an English word")
+    expect(habits.learned(limit: 10).map(\.word).sorted(), ["dùng", "model"].map(Suggest.key).sorted(), "only the switches are listed")
+    teach("rồi", .vietnamese, .vietnamese, 9)
+    teach("rồi", .vietnamese, .english, 3)
+    expect(habits.lean(after: "rồi"), nil, "a word followed by both is not decided (25% switch)")
     expect(habits.lean(after: nil), nil, "no word before")
 
     // A word chosen by hand counts for several samples.
-    habits.observe(after: "cài", language: .english, weight: LanguageHabits.chosenWeight, today: 0)
-    habits.observe(after: "cài", language: .english, weight: LanguageHabits.chosenWeight, today: 0)
+    habits.observe(after: "cài", showing: .vietnamese, language: .english, weight: LanguageHabits.chosenWeight, today: 0)
+    habits.observe(after: "cài", showing: .vietnamese, language: .english, weight: LanguageHabits.chosenWeight, today: 0)
     expect(habits.lean(after: "cài"), .english, "two chosen words are eight samples")
 
     // The habit changes with the user, and what is not seen fades.
@@ -949,26 +954,26 @@ func checkLanguageHabits() {
     expect(habits.lean(after: "dùng"), nil, "unused for over a year, it is forgotten")
     habits.asOf = 0
     var changing = LanguageHabits()
-    for _ in 0..<40 { changing.observe(after: "x", language: .english, weight: 1, today: 0) }
-    for _ in 0..<100 { changing.observe(after: "x", language: .vietnamese, weight: 1, today: 120) }
+    for _ in 0..<40 { changing.observe(after: "x", showing: .english, language: .english, weight: 1, today: 0) }
+    for _ in 0..<100 { changing.observe(after: "x", showing: .english, language: .vietnamese, weight: 1, today: 120) }
     changing.asOf = 120
     expect(changing.lean(after: "x"), .vietnamese, "the new habit wins")
 
-    // A habit however well learned is relearned in tens of words.
+    // A habit however well learned is given up in tens of words.
     var settled = LanguageHabits()
-    for _ in 0..<500 { settled.observe(after: "dùng", language: .english, weight: 1, today: 0) }
+    for _ in 0..<500 { settled.observe(after: "dùng", showing: .vietnamese, language: .english, weight: 1, today: 0) }
     var words = 0
-    while settled.lean(after: "dùng") != .vietnamese, words < 400 {
-        settled.observe(after: "dùng", language: .vietnamese, weight: 1, today: 0)
+    while settled.lean(after: "dùng") != nil, words < 400 {
+        settled.observe(after: "dùng", showing: .vietnamese, language: .vietnamese, weight: 1, today: 0)
         words += 1
     }
-    expect(words <= 120, true, "relearned within 120 words (took \(words))")
+    expect(words <= 20, true, "given up within 20 words (took \(words))")
 
     // The table never passes its cap, and what is one-sided and frequent outlasts the noise.
     var full = LanguageHabits()
-    for _ in 0..<30 { full.observe(after: "giữ", language: .english, weight: 1, today: 0) }
+    for _ in 0..<30 { full.observe(after: "giữ", showing: .vietnamese, language: .english, weight: 1, today: 0) }
     for i in 0..<(LanguageHabits.maxNodes + 3000) {
-        full.observe(after: "w" + String(UnicodeScalar(UInt8(97 + i % 26))) + String(UnicodeScalar(UInt8(97 + (i / 26) % 26))) + String(UnicodeScalar(UInt8(97 + (i / 676) % 26))) + String(UnicodeScalar(UInt8(97 + (i / 17576) % 26))), language: .vietnamese, weight: 1, today: 0)
+        full.observe(after: "w" + String(UnicodeScalar(UInt8(97 + i % 26))) + String(UnicodeScalar(UInt8(97 + (i / 26) % 26))) + String(UnicodeScalar(UInt8(97 + (i / 676) % 26))) + String(UnicodeScalar(UInt8(97 + (i / 17576) % 26))), showing: .english, language: .vietnamese, weight: 1, today: 0)
     }
     expect(full.nodes.count <= LanguageHabits.maxNodes, true, "the cap holds")
     expect(full.lean(after: "giữ"), .english, "the frequent one-sided word survived")
@@ -1005,16 +1010,20 @@ func checkLanguageHabits() {
     expect(session.observed == nil, true, "the first word has no word before it")
     _ = type(&session, "dungf")
     expect(session.observed?.previous, "tôi", "the word before")
+    expect(session.observed?.previousLanguage, .vietnamese, "and the language it showed")
     expect(session.observed?.language, .vietnamese, "a Vietnamese word, never in doubt")
     expect(session.observed?.weight, 1, "counted once")
     _ = type(&session, "hello")
     expect(session.observed?.language, .english, "an English word, never in doubt")
     _ = type(&session, "test")
     expect(session.observed == nil, true, "a word the lists know says nothing: its language came from the same score")
+    _ = type(&session, "a")
+    _ = type(&session, "dungf")
+    expect(session.observed == nil, true, "a word that reads the same in both languages teaches nothing about what follows it")
     // The word after one the user always follows with English.
     var learned = Settings()
     var trained = LanguageHabits()
-    for _ in 0..<10 { trained.observe(after: "cài", language: .english, weight: 1, today: 0) }
+    for _ in 0..<10 { trained.observe(after: "cài", showing: .vietnamese, language: .english, weight: 1, today: 0) }
     trained.asOf = 0
     learned.habits = trained
     session = Session()
@@ -1030,6 +1039,7 @@ func checkLanguageHabits() {
     for ch in "as" { _ = session.push(ch) }
     _ = session.finishRaw()
     expect(session.observed?.previous, "cài", "Esc: the word before")
+    expect(session.observed?.previousLanguage, .vietnamese, "Esc: the language it showed")
     expect(session.observed?.language, .english, "Esc: English")
     expect(session.observed?.weight, LanguageHabits.chosenWeight, "Esc: a chosen word")
 }

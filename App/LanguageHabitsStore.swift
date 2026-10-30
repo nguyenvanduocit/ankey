@@ -35,9 +35,9 @@ final class LanguageHabitsStore: @unchecked Sendable {
         return copy
     }
 
-    func observe(after previous: String, language: Language, weight: Double) {
+    func observe(after previous: String, showing shown: Language, language: Language, weight: Double) {
         lock.lock()
-        habits.observe(after: previous, language: language, weight: weight, today: PersonalPhrasesStore.today)
+        habits.observe(after: previous, showing: shown, language: language, weight: weight, today: PersonalPhrasesStore.today)
         unsaved += 1
         let due = unsaved >= Self.saveEvery || Date().timeIntervalSince(lastSave) > Self.saveAfter
         lock.unlock()

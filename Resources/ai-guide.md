@@ -45,7 +45,7 @@ mapped word. `appRules` set a mode per app (bundle ID): `marked` underlines the 
 **learned.** `words` are corrections: a score from -2 to 2 added to a word's built-in English score. A positive
 score keeps the word as typed (English), a negative score converts it (Vietnamese), and plus or minus 2 pins
 it. `phrases` are word sequences the user types the same way again and again (a prefix and the word that
-follows). `habits` say which language the user writes after a word. These lists hold what Ankey acts on, the same
+follows). `habits` are the words after which the user switches language (English after `dùng`, Vietnamese after `model`). These lists hold what Ankey acts on, the same
 lists the Settings window shows, not every sequence it has seen. `source` is `live` when the running app
 answered and `files` when Ankey was not running; files can be up to five minutes behind.
 

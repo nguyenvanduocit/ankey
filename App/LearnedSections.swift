@@ -30,7 +30,7 @@ struct LearnedSections: View {
                 }
                 PixelToggle(
                     title: "Học khi nào bạn gõ tiếng Anh",
-                    detail: "Nhớ sau từ nào bạn thường gõ tiếng Anh hay tiếng Việt, dùng khi một chữ có thể là cả hai (as, cos). Tối đa 1 MB.",
+                    detail: "Nhớ sau từ nào bạn hay đổi thứ tiếng (dùng → tiếng Anh), dùng khi một chữ có thể là cả hai (as, cos). Tối đa 1 MB.",
                     isOn: $model.value.learnsLanguage
                 )
             }
@@ -62,8 +62,8 @@ struct LearnedSections: View {
                 PixelSection(
                     title: "Thói quen ngôn ngữ",
                     footer: habits.isEmpty
-                        ? "Chưa có thói quen nào. Cần ít nhất 8 lần gõ sau cùng một từ."
-                        : "Sau những từ này bạn gần như luôn gõ cùng một thứ tiếng. Bấm xoá để quên."
+                        ? "Chưa có thói quen nào. Cần ít nhất 8 lần đổi thứ tiếng sau cùng một từ."
+                        : "Sau những từ này bạn gần như luôn đổi sang thứ tiếng kia. Bấm xoá để quên."
                 ) {
                     ForEach(habits, id: \.word) { row in
                         WordRow(word: "\(row.word) → \(row.language == .english ? "tiếng Anh" : "tiếng Việt")  ×\(row.samples)") {
