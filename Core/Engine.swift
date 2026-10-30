@@ -367,7 +367,7 @@ enum Engine {
     ) -> Verdict {
         let word = raw.lowercased()
         if let mapped = settings.customMap[word] {
-            return Verdict(text: mapped, language: .vietnamese)
+            return Verdict(text: cased(mapped, like: raw), language: .vietnamese)
         }
         let (atoms, tone, out, literal) = telex(raw, settings)
         let language: Language? = out == literal ? nil : .vietnamese
@@ -386,6 +386,13 @@ enum Engine {
         }
         guard isSyllable(atoms, tone, out, settings) else { return Verdict(text: literal, language: .english) }
         return Verdict(text: out, language: language, contested: listed)
+    }
+
+    /// A custom-mapped word in the case of the keys typed: `Dodoir` shows `Đổi`, `DODOIR` shows `ĐỔI`.
+    private static func cased(_ mapped: String, like raw: String) -> String {
+        guard let first = raw.first, first.isUppercase else { return mapped }
+        if raw.count > 1, raw == raw.uppercased() { return mapped.uppercased() }
+        return mapped.prefix(1).uppercased() + mapped.dropFirst()
     }
 
     /// The text of a tone key typed twice, when the second press undoes the tone (`as` showed `á`, so `ass` is

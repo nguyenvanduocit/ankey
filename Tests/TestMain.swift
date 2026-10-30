@@ -240,6 +240,14 @@ func checkShorthand() {
     check("ddt", custom, "ddt")
 }
 
+func checkCustomMap() {
+    var custom = Settings()
+    custom.customMap = ["dodoir": "\u{0111}\u{1ed5}i"]
+    check("dodoir", custom, "\u{0111}\u{1ed5}i")
+    check("Dodoir", custom, "\u{0110}\u{1ed5}i")
+    check("DODOIR", custom, "\u{0110}\u{1ed4}I")
+}
+
 func checkSettings() {
     let classic = Settings(toneStyle: .classic)
     // Classic style moves the tone only on open oa, oe, uy.
@@ -1628,6 +1636,7 @@ struct TestRunner {
         checkRelease()
         checkAnalyzeTiming()
         checkShorthand()
+        checkCustomMap()
         checkAttested()
         checkBuiltInEnglish()
         checkContext()
